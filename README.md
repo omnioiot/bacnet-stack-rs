@@ -5,3 +5,7 @@ This repo contains FFI bindings for the [BACnet stack](http://bacnet.sourceforge
 
 The folder bacnet-stack-1.0.0 contains the full source code, copied verbatim
 from sourceforge.
+
+## Original source
+
+Link: <https://sourceforge.net/projects/bacnet/files/bacnet-stack/bacnet-stack-1.0.0/>
