@@ -1,0 +1,9 @@
+[package]
+name = "bacnet-sys"
+version = "1.0.0"
+authors = ["Thomas Jespersen <tj@omnio.net>"]
+edition = "2018"
+
+[build-dependencies]
+cmake = "0.1"
+bindgen = "0.59"

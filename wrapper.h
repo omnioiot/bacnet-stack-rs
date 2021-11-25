@@ -1,0 +1,15 @@
+#define BACDL_ALL 1
+#define BACDL_ETHERNET 1
+#include "bacnet-stack-1.0.0/src/bacnet/bactext.h"
+#include "bacnet-stack-1.0.0/src/bacnet/iam.h"
+#include "bacnet-stack-1.0.0/src/bacnet/basic/binding/address.h"
+#include "bacnet-stack-1.0.0/src/bacnet/config.h"
+#include "bacnet-stack-1.0.0/src/bacnet/bacdef.h"
+#include "bacnet-stack-1.0.0/src/bacnet/npdu.h"
+#include "bacnet-stack-1.0.0/src/bacnet/apdu.h"
+#include "bacnet-stack-1.0.0/src/bacnet/basic/services.h"
+#include "bacnet-stack-1.0.0/src/bacnet/basic/object/device.h"
+#include "bacnet-stack-1.0.0/src/bacnet/datalink/datalink.h"
+#include "bacnet-stack-1.0.0/src/bacnet/version.h"
+#include "bacnet-stack-1.0.0/src/bacnet/datalink/dlenv.h"
+//#include "bacnet-stack-1.0.0/src/bacnet/bacport.h"
