@@ -9,6 +9,6 @@ fn main() {
 
     println!("Got {} devices", devices.len());
     for dev in devices {
-        println!("Device ID = {}", dev.device_id);
+        println!("Device ID = {} MAC = {:02X?} NET = {}", dev.device_id, dev.mac_addr, dev.network_number);
     }
 }

@@ -13,7 +13,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 lazy_static! {
-    /// A
+    /// A global list of discovered devices. The function my_i_am_handler() pushes discovered
+    /// devices here.
     static ref DISCOVERED_DEVICES: Mutex<Vec<BACnetDevice>> = Mutex::new(vec![]);
 }
 
@@ -23,6 +24,7 @@ pub struct BACnetDevice {
     pub max_apdu: u32,
     pub vendor_id: u16,
     pub mac_addr: [u8; 6],
+    pub network_number: u16,
 }
 
 pub struct WhoIs {
@@ -95,6 +97,7 @@ extern "C" fn my_i_am_handler(
     let mac_len = unsafe { (*src).mac_len } as usize;
     let mut mac_addr = [0u8; 6];
     mac_addr[..mac_len].copy_from_slice(unsafe { &(*src).mac[..mac_len] });
+    let network_number = unsafe { (*src).net };
 
     debug!("MAC = {:02X?}", mac_addr);
     if let Ok(mut lock) = DISCOVERED_DEVICES.lock() {
@@ -103,6 +106,7 @@ extern "C" fn my_i_am_handler(
             max_apdu,
             vendor_id,
             mac_addr,
+            network_number,
         });
     }
 }
