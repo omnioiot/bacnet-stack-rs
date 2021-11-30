@@ -28,8 +28,8 @@ pub struct BACnetDevice {
 }
 
 pub struct WhoIs {
-    /// How long to wait until
-    timeout: Duration, // millis
+    /// How long to wait until we stop listening for I-Am requests.
+    timeout: Duration,
 }
 
 // WhoIs::new().timeout(1000).execute()
@@ -69,7 +69,7 @@ impl Default for WhoIs {
 #[no_mangle]
 extern "C" fn my_i_am_handler(
     service_request: *mut u8,
-    service_len: u16,
+    _service_len: u16,
     src: *mut bacnet_sys::BACNET_ADDRESS,
 ) {
     let mut device_id = 0;
@@ -111,6 +111,7 @@ extern "C" fn my_i_am_handler(
     }
 }
 
+// TODO(tj): Handle duplicates.
 fn whois(timeout: Duration) {
     let mut dest = bacnet_sys::BACNET_ADDRESS::default();
     let target_object_instance_min = -1i32; // TODO(tj): parameterize?
@@ -150,7 +151,7 @@ fn whois(timeout: Duration) {
     }
     let start = Instant::now();
     let mut i = 0;
-    loop {
+    while start.elapsed() < timeout {
         let pdu_len = unsafe {
             bacnet_sys::bip_receive(
                 &mut src as *mut _,
@@ -160,15 +161,11 @@ fn whois(timeout: Duration) {
             )
         };
         if pdu_len > 0 {
-            // process
             unsafe {
                 bacnet_sys::npdu_handler(&mut src as *mut _, &mut rx_buf as *mut _, pdu_len);
             }
         }
 
-        if start.elapsed() > timeout {
-            break;
-        }
         i += 1;
     }
     debug!("Looped {} times", i);
