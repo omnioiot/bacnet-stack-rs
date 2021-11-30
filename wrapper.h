@@ -1,5 +1,5 @@
 #define BACDL_ALL 1
-#define BACDL_ETHERNET 1
+#define BACDL_BIP 1
 #include "bacnet-stack-1.0.0/src/bacnet/bactext.h"
 #include "bacnet-stack-1.0.0/src/bacnet/iam.h"
 #include "bacnet-stack-1.0.0/src/bacnet/basic/binding/address.h"
@@ -12,4 +12,5 @@
 #include "bacnet-stack-1.0.0/src/bacnet/datalink/datalink.h"
 #include "bacnet-stack-1.0.0/src/bacnet/version.h"
 #include "bacnet-stack-1.0.0/src/bacnet/datalink/dlenv.h"
+#include "bacnet-stack-1.0.0/src/bacnet/bacenum.h"
 //#include "bacnet-stack-1.0.0/src/bacnet/bacport.h"

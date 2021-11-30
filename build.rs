@@ -7,8 +7,8 @@ fn main() {
         //.define("BAC_ROUTING", "OFF") // not sure what this implies
         .define("BACNET_BUILD_PIFACE_APP", "OFF")
         .define("BACNET_BUILD_PIFACE_APP", "OFF")
-        .define("BACDL_BIP", "OFF")
-        .define("BACDL_ETHERNET", "ON")
+        .define("BACDL_BIP", "ON")
+        .define("BACDL_ETHERNET", "OFF")
         .build();
 
     dir.push("build");
