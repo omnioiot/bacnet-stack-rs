@@ -67,7 +67,7 @@ impl Default for WhoIs {
 }
 
 #[no_mangle]
-extern "C" fn my_i_am_handler(
+extern "C" fn i_am_handler(
     service_request: *mut u8,
     _service_len: u16,
     src: *mut bacnet_sys::BACNET_ADDRESS,
@@ -111,7 +111,8 @@ extern "C" fn my_i_am_handler(
     }
 }
 
-// TODO(tj): Handle duplicates.
+// TODO(tj): Handle duplicates. A duplicate is pretty much a device ID we've already seen, from
+// what I understand.
 fn whois(timeout: Duration) {
     let mut dest = bacnet_sys::BACNET_ADDRESS::default();
     let target_object_instance_min = -1i32; // TODO(tj): parameterize?
@@ -129,7 +130,7 @@ fn whois(timeout: Duration) {
         );
         bacnet_sys::apdu_set_unconfirmed_handler(
             bacnet_sys::BACNET_UNCONFIRMED_SERVICE_SERVICE_UNCONFIRMED_I_AM,
-            Some(my_i_am_handler),
+            Some(i_am_handler),
         );
 
         // FIXME(tj): Set error handlers
