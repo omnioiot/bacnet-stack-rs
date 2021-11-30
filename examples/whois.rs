@@ -10,6 +10,26 @@ extern "C" fn my_i_am_handler(
     src: *mut bacnet_sys::BACNET_ADDRESS,
 ) {
     println!("service_len = {}", service_len);
+    let mut device_id = 0;
+    let mut max_apdu = 0;
+    let mut segmentation = 0;
+    let mut vendor_id = 0;
+
+    let len = unsafe {
+        bacnet_sys::iam_decode_service_request(
+            service_request,
+            &mut device_id,
+            &mut max_apdu,
+            &mut segmentation,
+            &mut vendor_id
+        )
+    };
+    println!("len = {}", len);
+    if len != -1 {
+        println!("device_id = {} max_apdu = {} vendor_id = {}", device_id, max_apdu, vendor_id);
+    } else {
+        println!("unable to decode I-Am request");
+    }
 }
 
 fn main() {
