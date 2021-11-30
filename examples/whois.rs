@@ -97,7 +97,6 @@ fn main() {
         let pdu_len = unsafe {
             bacnet_sys::bip_receive(&mut src as *mut _, &mut rx_buf as *mut _, bacnet_sys::MAX_MPDU as u16, timeout)
         };
-        println!("pdu_len = {}", pdu_len);
         if pdu_len > 0 {
             // process
             unsafe {
