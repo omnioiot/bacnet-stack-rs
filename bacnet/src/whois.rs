@@ -9,11 +9,11 @@
 // In effect, this library is not thread-safe, so we need to make sure that only one WhoIs client
 // is running at a time.
 
-use std::time::{Duration, Instant};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 lazy_static! {
-    /// A 
+    /// A
     static ref DISCOVERED_DEVICES: Mutex<Vec<BACnetDevice>> = Mutex::new(vec![]);
 }
 
@@ -26,7 +26,7 @@ pub struct BACnetDevice {
 }
 
 pub struct WhoIs {
-    /// How long to wait until 
+    /// How long to wait until
     timeout: Duration, // millis
 }
 
@@ -81,14 +81,17 @@ extern "C" fn my_i_am_handler(
             &mut device_id,
             &mut max_apdu,
             &mut segmentation,
-            &mut vendor_id
+            &mut vendor_id,
         )
     };
     if len == -1 {
         error!("unable to decode I-Am request...");
         return;
     }
-    debug!("device_id = {} max_apdu = {} vendor_id = {}", device_id, max_apdu, vendor_id);
+    debug!(
+        "device_id = {} max_apdu = {} vendor_id = {}",
+        device_id, max_apdu, vendor_id
+    );
     let mac_len = unsafe { (*src).mac_len } as usize;
     let mut mac_addr = [0u8; 6];
     mac_addr[..mac_len].copy_from_slice(unsafe { &(*src).mac[..mac_len] });
@@ -117,7 +120,7 @@ fn whois(timeout: Duration) {
         bacnet_sys::apdu_set_unrecognized_service_handler_handler(None);
         bacnet_sys::apdu_set_confirmed_handler(
             bacnet_sys::BACNET_CONFIRMED_SERVICE_SERVICE_CONFIRMED_READ_PROPERTY,
-            Some(bacnet_sys::handler_read_property)
+            Some(bacnet_sys::handler_read_property),
         );
         bacnet_sys::apdu_set_unconfirmed_handler(
             bacnet_sys::BACNET_UNCONFIRMED_SERVICE_SERVICE_UNCONFIRMED_I_AM,
@@ -145,7 +148,12 @@ fn whois(timeout: Duration) {
     let mut i = 0;
     loop {
         let pdu_len = unsafe {
-            bacnet_sys::bip_receive(&mut src as *mut _, &mut rx_buf as *mut _, bacnet_sys::MAX_MPDU as u16, bip_timeout)
+            bacnet_sys::bip_receive(
+                &mut src as *mut _,
+                &mut rx_buf as *mut _,
+                bacnet_sys::MAX_MPDU as u16,
+                bip_timeout,
+            )
         };
         if pdu_len > 0 {
             // process

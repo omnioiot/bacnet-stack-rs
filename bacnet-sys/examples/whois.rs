@@ -21,14 +21,17 @@ extern "C" fn my_i_am_handler(
             &mut device_id,
             &mut max_apdu,
             &mut segmentation,
-            &mut vendor_id
+            &mut vendor_id,
         )
     };
     if len == -1 {
         println!("unable to decode I-Am request");
         return;
     }
-    println!("device_id = {} max_apdu = {} vendor_id = {}", device_id, max_apdu, vendor_id);
+    println!(
+        "device_id = {} max_apdu = {} vendor_id = {}",
+        device_id, max_apdu, vendor_id
+    );
     let mac_len = unsafe { (*src).mac_len } as usize;
     mac_addr[..mac_len].copy_from_slice(unsafe { &(*src).mac[..mac_len] });
     println!("MAC = {:02X?}", mac_addr);
@@ -62,7 +65,7 @@ fn main() {
         bacnet_sys::apdu_set_unrecognized_service_handler_handler(None);
         bacnet_sys::apdu_set_confirmed_handler(
             bacnet_sys::BACNET_CONFIRMED_SERVICE_SERVICE_CONFIRMED_READ_PROPERTY,
-            Some(bacnet_sys::handler_read_property)
+            Some(bacnet_sys::handler_read_property),
         );
         bacnet_sys::apdu_set_unconfirmed_handler(
             bacnet_sys::BACNET_UNCONFIRMED_SERVICE_SERVICE_UNCONFIRMED_I_AM,
@@ -95,7 +98,12 @@ fn main() {
     let mut i = 0;
     loop {
         let pdu_len = unsafe {
-            bacnet_sys::bip_receive(&mut src as *mut _, &mut rx_buf as *mut _, bacnet_sys::MAX_MPDU as u16, timeout)
+            bacnet_sys::bip_receive(
+                &mut src as *mut _,
+                &mut rx_buf as *mut _,
+                bacnet_sys::MAX_MPDU as u16,
+                timeout,
+            )
         };
         if pdu_len > 0 {
             // process
