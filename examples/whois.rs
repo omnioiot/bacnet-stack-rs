@@ -90,6 +90,7 @@ fn main() {
         );
     }
     let start = Instant::now();
+    let mut i = 0;
     loop {
         let pdu_len = unsafe {
             bacnet_sys::bip_receive(&mut src as *mut _, &mut rx_buf as *mut _, bacnet_sys::MAX_MPDU as u16, timeout)
@@ -104,7 +105,9 @@ fn main() {
         if start.elapsed().as_secs() > 3 {
             break;
         }
+        i += 1;
     }
+    println!("Looped {} times", i);
 
     // atexit(ethernet_cleanup());
     unsafe {
