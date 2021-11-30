@@ -1,0 +1,4 @@
+[submodule "bacnet-sys/bacnet-stack"]
+	path = bacnet-sys/bacnet-stack
+	url = https://github.com/bacnet-stack/bacnet-stack
+	branch = bacnet-stack-1.0
