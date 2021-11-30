@@ -19,10 +19,10 @@ lazy_static! {
 
 /// A BACnet device that responded with I-Am in response to the Who-Is we sent out.
 pub struct BACnetDevice {
-    device_id: u32,
-    max_apdu: u32,
-    vendor_id: u16,
-    mac_addr: [u8; 6],
+    pub device_id: u32,
+    pub max_apdu: u32,
+    pub vendor_id: u16,
+    pub mac_addr: [u8; 6],
 }
 
 pub struct WhoIs {
