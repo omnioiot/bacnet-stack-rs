@@ -40,9 +40,17 @@ extern "C" fn my_error_handler(
     error_code: bacnet_sys::BACNET_ERROR_CODE,
 ) {
     // TODO(tj): address_match(&Target_Address, src) && invoke_id == Request_Invoke_ID
+    let error_class_str =
+        unsafe { std::ffi::CStr::from_ptr(bacnet_sys::bactext_error_class_name(error_class)) }
+            .to_string_lossy()
+            .into_owned();
+    let error_code_str =
+        unsafe { std::ffi::CStr::from_ptr(bacnet_sys::bactext_error_code_name(error_code)) }
+            .to_string_lossy()
+            .into_owned();
     println!(
-        "BACnet error: error_class={} error_code={}",
-        error_class, error_code
+        "BACnet error: error_class={} ({}) error_code={} ({})",
+        error_class, error_class_str, error_code, error_code_str,
     );
 }
 
