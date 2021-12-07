@@ -9,6 +9,7 @@
 #include "bacnet-stack-1.0.0/src/bacnet/apdu.h"
 #include "bacnet-stack-1.0.0/src/bacnet/basic/services.h"
 #include "bacnet-stack-1.0.0/src/bacnet/basic/object/device.h"
+#include "bacnet-stack-1.0.0/src/bacnet/basic/tsm/tsm.h"
 #include "bacnet-stack-1.0.0/src/bacnet/datalink/datalink.h"
 #include "bacnet-stack-1.0.0/src/bacnet/version.h"
 #include "bacnet-stack-1.0.0/src/bacnet/datalink/dlenv.h"
