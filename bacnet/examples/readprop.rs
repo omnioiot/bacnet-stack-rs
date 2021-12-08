@@ -17,6 +17,26 @@ struct Opt {
     dadr: u8,
     #[structopt(long, default_value = "47808")]
     port: u16,
+
+    #[structopt(short = "t", long, default_value = "analog-value", parse(try_from_str = parse_object_type))]
+    object_type: bacnet_sys::BACNET_OBJECT_TYPE,
+    #[structopt(short = "i", long, default_value = "22")]
+    object_instance: u32,
+}
+
+fn parse_object_type(src: &str) -> Result<bacnet_sys::BACNET_OBJECT_TYPE, String> {
+    if let Ok(t) = src.parse() {
+        Ok(t)
+    } else {
+        let mut found_index = 0;
+        if unsafe {
+            bacnet_sys::bactext_object_type_strtol(src.as_ptr() as *const i8, &mut found_index)
+        } {
+            Ok(found_index)
+        } else {
+            Err(format!("Couldn't parse input '{}' as object-type", src))
+        }
+    }
 }
 
 fn main() {
@@ -33,8 +53,7 @@ fn main() {
     println!("{:?}", dev);
     match dev.connect() {
         Ok(()) => {
-            let r =
-                dev.read_prop_present_value(bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_ANALOG_VALUE, 22);
+            let r = dev.read_prop_present_value(opt.object_type, opt.object_instance);
             match r {
                 Ok(_) => println!("ok"),
                 Err(err) => eprintln!("failed to read property: {}", err),
