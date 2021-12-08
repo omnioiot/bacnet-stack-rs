@@ -3,6 +3,7 @@ extern crate bacnet;
 use bacnet::BACnetDevice;
 
 fn main() {
+    pretty_env_logger::init();
     let mut dev = BACnetDevice::builder()
         .device_id(1025)
         .ip([192, 168, 10, 96].into())
