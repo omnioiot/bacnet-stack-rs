@@ -46,7 +46,18 @@ pub struct BACnetDevice {
 pub type ObjectType = bacnet_sys::BACNET_OBJECT_TYPE;
 pub type ObjectPropertyId = bacnet_sys::BACNET_PROPERTY_ID;
 
-pub type BACNetValue = ();
+#[derive(Debug)]
+pub enum BACnetValue {
+    Null, // Yes!
+    Bool(bool),
+    Uint(u64),
+    Int(i32),
+    Real(f32),
+    Double(f64),
+    String(String), // BACNET_CHARACTER_STRING
+    Bytes(Vec<u8>), // BACNET_OCTET_STRING
+                    //BitString( // BACNET_BIT_STRING
+}
 
 impl BACnetDevice {
     pub fn builder() -> BACnetDeviceBuilder {
@@ -90,7 +101,7 @@ impl BACnetDevice {
         &self,
         object_type: ObjectType,
         object_instance: u32,
-    ) -> Fallible<BACNetValue> {
+    ) -> Fallible<BACnetValue> {
         self.read_prop(
             object_type,
             object_instance,
@@ -106,7 +117,7 @@ impl BACnetDevice {
         object_type: ObjectType,
         object_instance: u32,
         property_id: ObjectPropertyId,
-    ) -> Fallible<BACNetValue> {
+    ) -> Fallible<BACnetValue> {
         let init = std::time::Instant::now();
         const TIMEOUT: u32 = 100;
         let request_invoke_id =
@@ -158,7 +169,7 @@ impl BACnetDevice {
         }
 
         debug!("read_prop() finished in {:?}", init.elapsed());
-        Ok(())
+        Ok(BACnetValue::Bool(true))
     }
 
     pub fn disconnect(&self) {
@@ -168,8 +179,8 @@ impl BACnetDevice {
 
 impl Drop for BACnetDevice {
     fn drop(&mut self) {
-        // FIXME(tj): Disconnect
-        info!("disconneting");
+        // FIXME(tj): Call address_remove()
+        info!("disconnecting");
     }
 }
 
@@ -271,9 +282,11 @@ extern "C" fn my_readprop_ack_handler(
                 )
             };
             if len >= 0 {
-                unsafe {
-                    bacnet_sys::rp_ack_print_data(&mut data);
-                }
+                //unsafe {
+                //    bacnet_sys::rp_ack_print_data(&mut data);
+                //}
+                let decoded = decode_data(data);
+                println!("{:?}", decoded);
             } else {
                 println!("<decode failed>");
             }
@@ -283,6 +296,46 @@ extern "C" fn my_readprop_ack_handler(
     }
     error!("device wasn't matched! {:?}", src);
 }
+
+fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetValue> {
+    let mut value = bacnet_sys::BACNET_APPLICATION_DATA_VALUE::default();
+    let appdata = data.application_data;
+    let appdata_len = data.application_data_len;
+
+    let len = unsafe {
+        bacnet_sys::bacapp_decode_application_data(appdata, appdata_len as u32, &mut value)
+    };
+
+    if len == bacnet_sys::BACNET_STATUS_ERROR {
+        bail!("decoding error");
+    }
+    println!("decoded {:?}", value.tag);
+
+    Ok(match value.tag as u32 {
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_NULL => BACnetValue::Null,
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_NULL => {
+            BACnetValue::Bool(unsafe { value.type_.Boolean })
+        }
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_SIGNED_INT => {
+            BACnetValue::Int(unsafe { value.type_.Signed_Int })
+        }
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_UNSIGNED_INT => {
+            BACnetValue::Uint(unsafe { value.type_.Unsigned_Int })
+        }
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_REAL => {
+            BACnetValue::Real(unsafe { value.type_.Real })
+        }
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_DOUBLE => {
+            BACnetValue::Double(unsafe { value.type_.Double })
+        }
+        //bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_STRING =>
+        //    BACnetValue::String(unsafe {
+        //        value.type_.Character_String
+        //    }),
+        _ => bail!("unhandled type tag {:?}", value.tag),
+    })
+}
+
 #[no_mangle]
 extern "C" fn my_error_handler(
     src: *mut bacnet_sys::BACNET_ADDRESS,
