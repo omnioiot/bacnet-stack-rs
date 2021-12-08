@@ -7,11 +7,13 @@ extern crate failure;
 
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::sync::Mutex;
+use std::sync::{Mutex, Once};
 
 use failure::Fallible;
 
 pub mod whois;
+
+static BACNET_STACK_INIT: Once = Once::new();
 
 // We need a global structure here for collecting "target addresses"
 lazy_static! {
@@ -52,11 +54,10 @@ impl BACnetDevice {
     }
 
     pub fn connect(&mut self) -> Fallible<()> {
-        // TODO(tj): Consider putting these in a Once
-        unsafe {
+        BACNET_STACK_INIT.call_once(|| unsafe {
             init_service_handlers();
             bacnet_sys::dlenv_init();
-        }
+        });
         // Add address
         unsafe {
             bacnet_sys::address_add(self.device_id, bacnet_sys::MAX_APDU, &mut self.addr);
@@ -259,6 +260,7 @@ extern "C" fn my_readprop_ack_handler(
         let is_addr_match = unsafe { bacnet_sys::address_match(&mut target.addr, src) };
         let is_request_invoke_id = unsafe { (*service_data).invoke_id } == target.request_invoke_id;
         if is_addr_match && is_request_invoke_id {
+            debug!("matched device");
             // Decode the data
             let len = unsafe {
                 bacnet_sys::rp_ack_decode_service_request(
@@ -267,6 +269,7 @@ extern "C" fn my_readprop_ack_handler(
                     &mut data as *mut _,
                 )
             };
+            debug!("Got data of len = {}", len);
             if len >= 0 {
                 unsafe {
                     bacnet_sys::rp_ack_print_data(&mut data);
@@ -275,9 +278,10 @@ extern "C" fn my_readprop_ack_handler(
                 println!("<decode failed>");
             }
             target.request_invoke_id = 0;
-            break;
+            return;
         }
     }
+    error!("device wasn't matched! {:?}", src);
 }
 #[no_mangle]
 extern "C" fn my_error_handler(
