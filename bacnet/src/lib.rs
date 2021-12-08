@@ -52,6 +52,11 @@ impl BACnetDevice {
     }
 
     pub fn connect(&mut self) -> Fallible<()> {
+        // TODO(tj): Consider putting these in a Once
+        unsafe {
+            init_service_handlers();
+            bacnet_sys::dlenv_init();
+        }
         // Add address
         unsafe {
             bacnet_sys::address_add(self.device_id, bacnet_sys::MAX_APDU, &mut self.addr);
@@ -248,15 +253,12 @@ extern "C" fn my_readprop_ack_handler(
     let mut data: bacnet_sys::BACNET_READ_PROPERTY_DATA =
         bacnet_sys::BACNET_READ_PROPERTY_DATA::default();
 
-    // TODO(tj): Find the Target_Address == src and
-    // NOTE(tj): Should do address_match(&Target_Address, src), but here we'll just assume that
-    // it's the right address
     let mut lock = TARGET_ADDRESSES.lock().unwrap();
 
     for target in lock.values_mut() {
-        if unsafe { bacnet_sys::address_match(&mut target.addr, src) }
-            && unsafe { (*service_data).invoke_id } == target.request_invoke_id
-        {
+        let is_addr_match = unsafe { bacnet_sys::address_match(&mut target.addr, src) };
+        let is_request_invoke_id = unsafe { (*service_data).invoke_id } == target.request_invoke_id;
+        if is_addr_match && is_request_invoke_id {
             // Decode the data
             let len = unsafe {
                 bacnet_sys::rp_ack_decode_service_request(
@@ -276,4 +278,83 @@ extern "C" fn my_readprop_ack_handler(
             break;
         }
     }
+}
+#[no_mangle]
+extern "C" fn my_error_handler(
+    src: *mut bacnet_sys::BACNET_ADDRESS,
+    invoke_id: u8,
+    error_class: bacnet_sys::BACNET_ERROR_CLASS,
+    error_code: bacnet_sys::BACNET_ERROR_CODE,
+) {
+    // TODO(tj): address_match(&Target_Address, src) && invoke_id == Request_Invoke_ID
+    let error_class_str =
+        unsafe { std::ffi::CStr::from_ptr(bacnet_sys::bactext_error_class_name(error_class)) }
+            .to_string_lossy()
+            .into_owned();
+    let error_code_str =
+        unsafe { std::ffi::CStr::from_ptr(bacnet_sys::bactext_error_code_name(error_code)) }
+            .to_string_lossy()
+            .into_owned();
+    println!(
+        "BACnet error: error_class={} ({}) error_code={} ({})",
+        error_class, error_class_str, error_code, error_code_str,
+    );
+}
+
+#[no_mangle]
+extern "C" fn my_abort_handler(
+    src: *mut bacnet_sys::BACNET_ADDRESS,
+    invoke_id: u8,
+    abort_reason: u8,
+    server: bool,
+) {
+    let _ = server;
+    let _ = src;
+    println!(
+        "aborted invoke_id = {} abort_reason = {}",
+        invoke_id, abort_reason
+    );
+}
+
+#[no_mangle]
+extern "C" fn my_reject_handler(
+    src: *mut bacnet_sys::BACNET_ADDRESS,
+    invoke_id: u8,
+    reject_reason: u8,
+) {
+    let _ = src;
+    println!(
+        "rejected invoke_id = {} reject_reason = {}",
+        invoke_id, reject_reason
+    );
+}
+
+unsafe fn init_service_handlers() {
+    bacnet_sys::Device_Init(std::ptr::null_mut());
+    bacnet_sys::apdu_set_unconfirmed_handler(
+        bacnet_sys::BACNET_UNCONFIRMED_SERVICE_SERVICE_UNCONFIRMED_WHO_IS,
+        Some(bacnet_sys::handler_who_is),
+    );
+    bacnet_sys::apdu_set_unconfirmed_handler(
+        bacnet_sys::BACNET_UNCONFIRMED_SERVICE_SERVICE_UNCONFIRMED_I_AM,
+        Some(bacnet_sys::handler_i_am_bind),
+    );
+    bacnet_sys::apdu_set_unrecognized_service_handler_handler(Some(
+        bacnet_sys::handler_unrecognized_service,
+    ));
+    bacnet_sys::apdu_set_confirmed_handler(
+        bacnet_sys::BACNET_CONFIRMED_SERVICE_SERVICE_CONFIRMED_READ_PROPERTY,
+        Some(bacnet_sys::handler_read_property),
+    );
+    bacnet_sys::apdu_set_confirmed_ack_handler(
+        bacnet_sys::BACNET_CONFIRMED_SERVICE_SERVICE_CONFIRMED_READ_PROPERTY,
+        Some(my_readprop_ack_handler),
+    );
+
+    bacnet_sys::apdu_set_error_handler(
+        bacnet_sys::BACNET_CONFIRMED_SERVICE_SERVICE_CONFIRMED_READ_PROPERTY,
+        Some(my_error_handler),
+    );
+    bacnet_sys::apdu_set_abort_handler(Some(my_abort_handler));
+    bacnet_sys::apdu_set_reject_handler(Some(my_reject_handler));
 }
