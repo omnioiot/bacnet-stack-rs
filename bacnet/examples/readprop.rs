@@ -4,6 +4,7 @@ use bacnet::BACnetDevice;
 
 fn main() {
     let mut dev = BACnetDevice::builder()
+        .device_id(1025)
         .ip([192, 168, 10, 96].into())
         .dnet(5)
         .dadr(14)

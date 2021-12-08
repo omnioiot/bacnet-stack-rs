@@ -15,7 +15,8 @@ pub mod whois;
 
 // We need a global structure here for collecting "target addresses"
 lazy_static! {
-    /// Global tracking struct for target addresses
+    /// Global tracking struct for target addresses. These are devices that we consider ourselves
+    /// connected to and communicating with.
     static ref TARGET_ADDRESSES: Mutex<HashMap<u32, TargetDevice>> = Mutex::new(HashMap::new());
 }
 
@@ -204,6 +205,11 @@ impl BACnetDeviceBuilder {
 
     pub fn port(mut self, port: u16) -> Self {
         self.port = port;
+        self
+    }
+
+    pub fn device_id(mut self, device_id: u32) -> Self {
+        self.device_id = device_id;
         self
     }
 
