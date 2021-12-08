@@ -107,6 +107,7 @@ impl BACnetDevice {
         object_instance: u32,
         property_id: ObjectPropertyId,
     ) -> Fallible<BACNetValue> {
+        let init = std::time::Instant::now();
         const TIMEOUT: u32 = 100;
         let request_invoke_id =
             if let Some(h) = TARGET_ADDRESSES.lock().unwrap().get_mut(&self.device_id) {
@@ -156,6 +157,7 @@ impl BACnetDevice {
             }
         }
 
+        debug!("read_prop() finished in {:?}", init.elapsed());
         Ok(())
     }
 
@@ -260,7 +262,6 @@ extern "C" fn my_readprop_ack_handler(
         let is_addr_match = unsafe { bacnet_sys::address_match(&mut target.addr, src) };
         let is_request_invoke_id = unsafe { (*service_data).invoke_id } == target.request_invoke_id;
         if is_addr_match && is_request_invoke_id {
-            debug!("matched device");
             // Decode the data
             let len = unsafe {
                 bacnet_sys::rp_ack_decode_service_request(
@@ -269,7 +270,6 @@ extern "C" fn my_readprop_ack_handler(
                     &mut data as *mut _,
                 )
             };
-            debug!("Got data of len = {}", len);
             if len >= 0 {
                 unsafe {
                     bacnet_sys::rp_ack_print_data(&mut data);
