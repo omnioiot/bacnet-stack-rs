@@ -22,6 +22,9 @@ struct Opt {
     object_type: bacnet_sys::BACNET_OBJECT_TYPE,
     #[structopt(short = "i", long, default_value = "22")]
     object_instance: u32,
+
+    #[structopt(short = "n", long, default_value = "1")]
+    number_of_reads: usize,
 }
 
 fn parse_object_type(src: &str) -> Result<bacnet_sys::BACNET_OBJECT_TYPE, String> {
@@ -53,10 +56,12 @@ fn main() {
     println!("{:?}", dev);
     match dev.connect() {
         Ok(()) => {
-            let r = dev.read_prop_present_value(opt.object_type, opt.object_instance);
-            match r {
-                Ok(_) => println!("ok"),
-                Err(err) => eprintln!("failed to read property: {}", err),
+            for _ in 0..opt.number_of_reads {
+                let r = dev.read_prop_present_value(opt.object_type, opt.object_instance);
+                match r {
+                    Ok(_) => println!("ok"),
+                    Err(err) => eprintln!("failed to read property: {}", err),
+                }
             }
         }
         Err(err) => {
