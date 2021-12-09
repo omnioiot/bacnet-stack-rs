@@ -12,6 +12,9 @@ use std::sync::{Mutex, Once};
 
 use failure::Fallible;
 
+use value::BACnetValue;
+
+mod value;
 pub mod whois;
 
 static BACNET_STACK_INIT: Once = Once::new();
@@ -24,6 +27,11 @@ lazy_static! {
 }
 
 // A structure for tracking
+//
+// FIXME(tj): This is a really poor hand-off mechanism. When making a request, we set the
+// request_invoke_id so the response can be matched properly, then we set the decoded value inside
+// an Option and read_prop() fishes it out. This means that read_prop() needs to acquire the mutex
+// twice for each data extraction, which seems like a really poor design.
 struct TargetDevice {
     addr: bacnet_sys::BACNET_ADDRESS,
     request_invoke_id: u8,
@@ -47,19 +55,6 @@ pub struct BACnetDevice {
 
 pub type ObjectType = bacnet_sys::BACNET_OBJECT_TYPE;
 pub type ObjectPropertyId = bacnet_sys::BACNET_PROPERTY_ID;
-
-#[derive(Debug)]
-pub enum BACnetValue {
-    Null, // Yes!
-    Bool(bool),
-    Uint(u64),
-    Int(i32),
-    Real(f32),
-    Double(f64),
-    String(String),            // BACNET_CHARACTER_STRING
-    Bytes(Vec<u8>),            // BACNET_OCTET_STRING
-    Enum(u32, Option<String>), // Enumerated values also have string representations...
-}
 
 impl BACnetDevice {
     pub fn builder() -> BACnetDeviceBuilder {
@@ -360,6 +355,14 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
             BACnetValue::String(s)
         }
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_ENUMERATED => {
+            // FIXME(tj): Find the string representation of the enum (if possible).
+            // See bacapp.c:1200
+            // See bactext.c:1266 - bactext_binary_present_value_name()
+            // Try calling:
+            //
+            // int bacapp_snprintf_value(char *str, size_t str_len, BACNET_OBJECT_PROPERTY_VALUE *object_value)
+            //
+            // It should return the numbers of characters written so we can permute it to a String
             let s = None;
             BACnetValue::Enum(unsafe { value.type_.Enumerated }, s)
         }
