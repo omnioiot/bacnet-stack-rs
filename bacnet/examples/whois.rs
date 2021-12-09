@@ -12,7 +12,7 @@ fn main() {
     println!("---------  ------------------------  ----  ------------------------  ----");
     for dev in devices {
         println!(
-            "{:8}  {:02X?}  {:4}  {:02X?}  {:4}",
+            "{:9}  {:02X?}  {:4}  {:02X?}  {:4}",
             dev.device_id, dev.mac_addr, dev.network_number, dev.addr, dev.max_apdu
         );
     }
