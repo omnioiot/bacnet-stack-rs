@@ -59,7 +59,7 @@ fn main() {
             for _ in 0..opt.number_of_reads {
                 let r = dev.read_prop_present_value(opt.object_type, opt.object_instance);
                 match r {
-                    Ok(_) => println!("ok"),
+                    Ok(_) => println!("result {:?}", r),
                     Err(err) => eprintln!("failed to read property: {}", err),
                 }
             }

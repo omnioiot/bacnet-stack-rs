@@ -27,6 +27,7 @@ lazy_static! {
 struct TargetDevice {
     addr: bacnet_sys::BACNET_ADDRESS,
     request_invoke_id: u8,
+    value: Option<Fallible<BACnetValue>>,
 }
 
 // As I understand the BACnet stack, it works by acting as another BACnet device on the network.
@@ -55,9 +56,9 @@ pub enum BACnetValue {
     Int(i32),
     Real(f32),
     Double(f64),
-    String(String), // BACNET_CHARACTER_STRING
-    Bytes(Vec<u8>), // BACNET_OCTET_STRING
-    Enum(u32),
+    String(String),            // BACNET_CHARACTER_STRING
+    Bytes(Vec<u8>),            // BACNET_OCTET_STRING
+    Enum(u32, Option<String>), // Enumerated values also have string representations...
 }
 
 impl BACnetDevice {
@@ -87,6 +88,7 @@ impl BACnetDevice {
                 TargetDevice {
                     addr: target_addr,
                     request_invoke_id: 0,
+                    value: None,
                 },
             );
             Ok(())
@@ -169,8 +171,17 @@ impl BACnetDevice {
             }
         }
 
+        let ret = {
+            let mut lock = TARGET_ADDRESSES.lock().unwrap();
+            let h = lock.get_mut(&self.device_id).unwrap();
+            h.request_invoke_id = 0;
+            h.value
+                .take()
+                .unwrap_or_else(|| Err(format_err!("No value was extracted")))
+        };
+
         debug!("read_prop() finished in {:?}", init.elapsed());
-        Ok(BACnetValue::Bool(true))
+        ret
     }
 
     pub fn disconnect(&self) {
@@ -287,9 +298,11 @@ extern "C" fn my_readprop_ack_handler(
                 //    bacnet_sys::rp_ack_print_data(&mut data);
                 //}
                 let decoded = decode_data(data);
-                println!("{:?}", decoded);
+                // Stick the decoded value into the target
+                target.value = Some(decoded);
             } else {
-                println!("<decode failed>");
+                error!("<decode failed>");
+                target.value = Some(Err(format_err!("failed to decode data")));
             }
             target.request_invoke_id = 0;
             return;
@@ -347,7 +360,8 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
             BACnetValue::String(s)
         }
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_ENUMERATED => {
-            BACnetValue::Enum(unsafe { value.type_.Enumerated })
+            let s = None;
+            BACnetValue::Enum(unsafe { value.type_.Enumerated }, s)
         }
         _ => bail!("unhandled type tag {:?}", value.tag),
     })
