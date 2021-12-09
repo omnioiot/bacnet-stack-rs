@@ -12,8 +12,10 @@ use std::sync::{Mutex, Once};
 
 use failure::Fallible;
 
+use epics::Epics;
 use value::BACnetValue;
 
+mod epics;
 mod value;
 pub mod whois;
 
@@ -139,6 +141,8 @@ impl BACnetDevice {
         let mut rx_buf = [0u8; bacnet_sys::MAX_MPDU as usize];
         let start = std::time::Instant::now();
         loop {
+            // TODO(tj): Consider pulling the "driving forward the internal state machine" stuff
+            // into an inner method here. We need it for EPICS as well.
             let pdu_len = unsafe {
                 bacnet_sys::bip_receive(
                     &mut src,
@@ -177,6 +181,28 @@ impl BACnetDevice {
 
         debug!("read_prop() finished in {:?}", init.elapsed());
         ret
+    }
+
+    pub fn epics(&self) -> Fallible<Epics> {
+        let init = std::time::Instant::now();
+        let mut src = bacnet_sys::BACNET_ADDRESS::default();
+
+        // There's a whole state machine here...
+        //
+        // Initial -> GetHeadingInfo
+
+        let mut my_object = bacnet_sys::BACNET_OBJECT_ID::default();
+        my_object.type_ = bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE;
+        my_object.instance = self.device_id;
+        let mut rpm_object = bacnet_sys::BACNET_READ_ACCESS_DATA::default();
+
+        // StartNextObject(...)
+        // BuildPropRequest(&rpm_object)
+        // request_invoke_id = Send_Read_Property_Multiple_Request(buffer, MAX_APDU, self.device_id,
+
+        debug!("epics() finished in {:?}", init.elapsed());
+        let epics = Epics {};
+        Ok(epics)
     }
 
     pub fn disconnect(&self) {
