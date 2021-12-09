@@ -6,6 +6,7 @@ extern crate log;
 extern crate failure;
 
 use std::collections::HashMap;
+use std::ffi::CStr;
 use std::net::Ipv4Addr;
 use std::sync::{Mutex, Once};
 
@@ -313,7 +314,7 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
 
     Ok(match value.tag as u32 {
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_NULL => BACnetValue::Null,
-        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_NULL => {
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_BOOLEAN => {
             BACnetValue::Bool(unsafe { value.type_.Boolean })
         }
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_SIGNED_INT => {
@@ -328,10 +329,23 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_DOUBLE => {
             BACnetValue::Double(unsafe { value.type_.Double })
         }
-        //bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_STRING =>
-        //    BACnetValue::String(unsafe {
-        //        value.type_.Character_String
-        //    }),
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_CHARACTER_STRING => {
+            // BACnet string has the following structure
+            // size_t length, uint8_t encoding, char value[MAX_CHARACTER_STRING_BYTES]
+            // For now just assume UTF-8 bytes, but we really should respect encodings...
+            //
+            // FIXME(tj): Look at value.type_.Character_String.encoding
+            let s = unsafe {
+                CStr::from_ptr(
+                    value.type_.Character_String.value
+                        [0..value.type_.Character_String.length as usize]
+                        .as_ptr(),
+                )
+                .to_string_lossy()
+                .into_owned()
+            };
+            BACnetValue::String(s)
+        }
         _ => bail!("unhandled type tag {:?}", value.tag),
     })
 }
@@ -345,13 +359,12 @@ extern "C" fn my_error_handler(
 ) {
     // TODO(tj): address_match(&Target_Address, src) && invoke_id == Request_Invoke_ID
     let error_class_str =
-        unsafe { std::ffi::CStr::from_ptr(bacnet_sys::bactext_error_class_name(error_class)) }
+        unsafe { CStr::from_ptr(bacnet_sys::bactext_error_class_name(error_class)) }
             .to_string_lossy()
             .into_owned();
-    let error_code_str =
-        unsafe { std::ffi::CStr::from_ptr(bacnet_sys::bactext_error_code_name(error_code)) }
-            .to_string_lossy()
-            .into_owned();
+    let error_code_str = unsafe { CStr::from_ptr(bacnet_sys::bactext_error_code_name(error_code)) }
+        .to_string_lossy()
+        .into_owned();
     println!(
         "BACnet error: error_class={} ({}) error_code={} ({})",
         error_class, error_class_str, error_code, error_code_str,
