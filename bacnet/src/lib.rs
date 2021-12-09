@@ -57,7 +57,7 @@ pub enum BACnetValue {
     Double(f64),
     String(String), // BACNET_CHARACTER_STRING
     Bytes(Vec<u8>), // BACNET_OCTET_STRING
-                    //BitString( // BACNET_BIT_STRING
+    Enum(u32),
 }
 
 impl BACnetDevice {
@@ -345,6 +345,9 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
                 .into_owned()
             };
             BACnetValue::String(s)
+        }
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_ENUMERATED => {
+            BACnetValue::Enum(unsafe { value.type_.Enumerated })
         }
         _ => bail!("unhandled type tag {:?}", value.tag),
     })
