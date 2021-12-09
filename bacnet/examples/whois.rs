@@ -7,11 +7,18 @@ fn main() {
         .execute()
         .unwrap();
 
-    println!("Got {} devices", devices.len());
+    let ndevices = devices.len();
+    println!("Device ID             MAC            SNET            SADR            APDU");
+    println!("---------  ------------------------  ----  ------------------------  ----");
     for dev in devices {
         println!(
-            "Device ID = {} MAC = {:02X?} NET = {} APDU = {}",
-            dev.device_id, dev.mac_addr, dev.network_number, dev.max_apdu,
+            "{:8}  {:02X?}  {:4}  {:02X?}  {:4}",
+            dev.device_id, dev.mac_addr, dev.network_number, dev.addr, dev.max_apdu
         );
     }
+    println!(
+        "Total: {} device{}",
+        ndevices,
+        if ndevices == 1 { "" } else { "s" }
+    );
 }

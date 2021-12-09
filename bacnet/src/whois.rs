@@ -15,16 +15,17 @@ use std::time::{Duration, Instant};
 lazy_static! {
     /// A global list of discovered devices. The function my_i_am_handler() pushes discovered
     /// devices here.
-    static ref DISCOVERED_DEVICES: Mutex<Vec<BACnetDevice>> = Mutex::new(vec![]);
+    static ref DISCOVERED_DEVICES: Mutex<Vec<IAmDevice>> = Mutex::new(vec![]);
 }
 
 /// A BACnet device that responded with I-Am in response to the Who-Is we sent out.
-pub struct BACnetDevice {
+pub struct IAmDevice {
     pub device_id: u32,
     pub max_apdu: u32,
     pub vendor_id: u16,
     pub mac_addr: [u8; 6],
     pub network_number: u16,
+    pub addr: [u8; 6],
 }
 
 pub struct WhoIs {
@@ -44,7 +45,7 @@ impl WhoIs {
         self
     }
 
-    pub fn execute(self) -> Result<Vec<BACnetDevice>, ()> {
+    pub fn execute(self) -> Result<Vec<IAmDevice>, ()> {
         // create an object with a Drop impl that calls bip_cleanup
         whois(self.timeout);
 
@@ -99,14 +100,21 @@ extern "C" fn i_am_handler(
     mac_addr[..mac_len].copy_from_slice(unsafe { &(*src).mac[..mac_len] });
     let network_number = unsafe { (*src).net };
 
+    let mut addr = [0u8; 6];
+    if network_number > 0 {
+        let adr_len = unsafe { (*src).len } as usize;
+        addr[..adr_len].copy_from_slice(unsafe { &(*src).adr[..adr_len] });
+    }
+
     debug!("MAC = {:02X?}", mac_addr);
     if let Ok(mut lock) = DISCOVERED_DEVICES.lock() {
-        lock.push(BACnetDevice {
+        lock.push(IAmDevice {
             device_id,
             max_apdu,
             vendor_id,
             mac_addr,
             network_number,
+            addr,
         });
     }
 }
