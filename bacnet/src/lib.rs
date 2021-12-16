@@ -22,11 +22,22 @@ pub mod whois;
 
 static BACNET_STACK_INIT: Once = Once::new();
 
+type RequestInvokeId = u8;
+type DeviceId = u32;
+
 // We need a global structure here for collecting "target addresses"
 lazy_static! {
     /// Global tracking struct for target addresses. These are devices that we consider ourselves
     /// connected to and communicating with.
-    static ref TARGET_ADDRESSES: Mutex<HashMap<u32, TargetDevice>> = Mutex::new(HashMap::new());
+    static ref TARGET_ADDRESSES: Mutex<HashMap<DeviceId, TargetDevice>> = Mutex::new(HashMap::new());
+}
+
+// Status of a request
+enum RequestStatus {
+    Ongoing,      // No reply has been received yet
+    Done,         // Successfully completed
+    Rejected(u8), // Rejected with the given reason code
+    Aborted(u8),  // Aborted with given reason code
 }
 
 // A structure for tracking
@@ -37,8 +48,8 @@ lazy_static! {
 // twice for each data extraction, which seems like a really poor design.
 struct TargetDevice {
     addr: bacnet_sys::BACNET_ADDRESS,
-    request_invoke_id: u8,
-    value: Option<Fallible<BACnetValue>>,
+    request: Option<(RequestInvokeId, RequestStatus)>, // For tracking on-going an ongoing request
+    value: Option<Fallible<BACnetValue>>,              // TODO Build this into the 'request status'
 }
 
 // As I understand the BACnet stack, it works by acting as another BACnet device on the network.
@@ -85,7 +96,7 @@ impl BACnetDevice {
                 self.device_id,
                 TargetDevice {
                     addr: target_addr,
-                    request_invoke_id: 0,
+                    request: None,
                     value: None,
                 },
             );
@@ -132,7 +143,7 @@ impl BACnetDevice {
                         bacnet_sys::BACNET_ARRAY_ALL,
                     )
                 };
-                h.request_invoke_id = request_invoke_id;
+                h.request = Some((request_invoke_id, RequestStatus::Ongoing));
                 request_invoke_id
             } else {
                 bail!("Not connected to device {}", self.device_id)
@@ -174,7 +185,7 @@ impl BACnetDevice {
         let ret = {
             let mut lock = TARGET_ADDRESSES.lock().unwrap();
             let h = lock.get_mut(&self.device_id).unwrap();
-            h.request_invoke_id = 0;
+            //h.request_invoke_id = 0;
             h.value
                 .take()
                 .unwrap_or_else(|| Err(format_err!("No value was extracted")))
@@ -242,6 +253,12 @@ impl BACnetDevice {
                 &mut rpm_object,
             )
         };
+        {
+            let mut lock = TARGET_ADDRESSES.lock().unwrap();
+            if let Some(target) = lock.get_mut(&self.device_id) {
+                target.request = Some((request_invoke_id, RequestStatus::Ongoing));
+            }
+        }
         debug!("request_invoke_id = {}", request_invoke_id);
 
         recv(&mut src, &mut rx_buf, request_invoke_id)?;
@@ -263,6 +280,7 @@ fn recv(
 ) -> Fallible<()> {
     const TIMEOUT: u32 = 100; // ms
     let start = std::time::Instant::now();
+    let src = dbg!(src);
     loop {
         let pdu_len = unsafe {
             bacnet_sys::bip_receive(
@@ -381,36 +399,28 @@ extern "C" fn my_readprop_ack_handler(
     let mut data: bacnet_sys::BACNET_READ_PROPERTY_DATA =
         bacnet_sys::BACNET_READ_PROPERTY_DATA::default();
 
+    let invoke_id = unsafe { (*service_data).invoke_id };
     let mut lock = TARGET_ADDRESSES.lock().unwrap();
-
-    for target in lock.values_mut() {
-        let is_addr_match = unsafe { bacnet_sys::address_match(&mut target.addr, src) };
-        let is_request_invoke_id = unsafe { (*service_data).invoke_id } == target.request_invoke_id;
-        if is_addr_match && is_request_invoke_id {
-            // Decode the data
-            let len = unsafe {
-                bacnet_sys::rp_ack_decode_service_request(
-                    service_request,
-                    service_len.into(),
-                    &mut data as *mut _,
-                )
-            };
-            if len >= 0 {
-                // XXX Consider moving data decoding out. We should probably just stick to getting
-                // the raw data, putting it somewhere and let someone else decode it.
-                let decoded = decode_data(data);
-                // Stick the decoded value into the target
-                //target.data = Some(data);
-                //target.value = Some(decoded);
-            } else {
-                error!("<decode failed>");
-                target.value = Some(Err(format_err!("failed to decode data")));
-            }
-            target.request_invoke_id = 0;
-            return;
+    if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
+        // Decode the data
+        let len = unsafe {
+            bacnet_sys::rp_ack_decode_service_request(
+                service_request,
+                service_len.into(),
+                &mut data as *mut _,
+            )
+        };
+        if len >= 0 {
+            // XXX Consider moving data decoding out. We should probably just stick to getting
+            // the raw data, putting it somewhere and let someone else decode it.
+            let decoded = decode_data(data);
+            target.value = Some(decoded);
+        } else {
+            error!("<decode failed>");
+            target.value = Some(Err(format_err!("failed to decode data")));
         }
+        target.request = Some((invoke_id, RequestStatus::Done));
     }
-    error!("device wasn't matched! {:?}", src);
 }
 
 fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetValue> {
@@ -516,10 +526,14 @@ extern "C" fn my_abort_handler(
 ) {
     let _ = server;
     let _ = src;
-    println!(
-        "aborted invoke_id = {} abort_reason = {}",
-        invoke_id, abort_reason
-    );
+    let mut lock = TARGET_ADDRESSES.lock().unwrap();
+    if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
+        target.request = Some((invoke_id, RequestStatus::Aborted(abort_reason)));
+        println!(
+            "aborted invoke_id = {} abort_reason = {}",
+            invoke_id, abort_reason
+        );
+    }
 }
 
 #[no_mangle]
@@ -529,10 +543,31 @@ extern "C" fn my_reject_handler(
     reject_reason: u8,
 ) {
     let _ = src;
-    println!(
-        "rejected invoke_id = {} reject_reason = {}",
-        invoke_id, reject_reason
-    );
+
+    let mut lock = TARGET_ADDRESSES.lock().unwrap();
+    if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
+        target.request = Some((invoke_id, RequestStatus::Rejected(reject_reason)));
+    }
+}
+
+fn find_matching_device<'a>(
+    guard: &'a mut std::sync::MutexGuard<'_, HashMap<u32, TargetDevice>>,
+    src: *mut bacnet_sys::BACNET_ADDRESS,
+    invoke_id: RequestInvokeId,
+) -> Option<&'a mut TargetDevice> {
+    let src = dbg!(src);
+
+    for target in guard.values_mut() {
+        let is_addr_match = unsafe { bacnet_sys::address_match(&mut target.addr, src) };
+        if let Some((request_invoke_id, _)) = &target.request {
+            let is_request_invoke_id = invoke_id == *request_invoke_id;
+            if is_addr_match && is_request_invoke_id {
+                return Some(target);
+            }
+        }
+    }
+    error!("device wasn't matched! {:?}", src);
+    return None;
 }
 
 unsafe fn init_service_handlers() {
