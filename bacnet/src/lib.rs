@@ -188,7 +188,6 @@ impl BACnetDevice {
         let init = std::time::Instant::now();
         let mut src = bacnet_sys::BACNET_ADDRESS::default();
 
-
         // FIXME Set different callback methods to handle incoming data
 
         // Getting EPICS relies on a different kind of data processing compared to readprop().
@@ -219,7 +218,7 @@ impl BACnetDevice {
             bacnet_sys::BACNET_PROPERTY_ID_PROP_MAX_APDU_LENGTH_ACCEPTED,
             bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_SERVICES_SUPPORTED,
             bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_OBJECT_TYPES_SUPPORTED,
-            bacnet_sys::BACNET_PROPERTY_ID_PROP_DESCRIPTION
+            bacnet_sys::BACNET_PROPERTY_ID_PROP_DESCRIPTION,
         ];
         // Build a linked list of BACNET_PROPERTY_REFERENCE
         let mut list_head = None;
@@ -233,15 +232,19 @@ impl BACnetDevice {
             list_head = Some(new_entry);
         }
         let mut rpm_property = bacnet_sys::BACNET_PROPERTY_REFERENCE::default();
-        rpm_object.listOfProperties = Box::into_raw(Box::new(list_head.unwrap()));
+        rpm_object.listOfProperties = Box::into_raw(Box::new(dbg!(list_head.unwrap())));
 
         let request_invoke_id = unsafe {
             bacnet_sys::Send_Read_Property_Multiple_Request(
-                &mut rx_buf as *mut _, bacnet_sys::MAX_APDU as u64, self.device_id, &mut rpm_object
+                &mut rx_buf as *mut _,
+                bacnet_sys::MAX_APDU as u64,
+                self.device_id,
+                &mut rpm_object,
             )
         };
         debug!("request_invoke_id = {}", request_invoke_id);
-        // request_invoke_id = Send_Read_Property_Multiple_Request(buffer, MAX_APDU, self.device_id,
+
+        recv(&mut src, &mut rx_buf, request_invoke_id)?;
 
         debug!("epics() finished in {:?}", init.elapsed());
         let epics = Epics::default();
@@ -251,6 +254,41 @@ impl BACnetDevice {
     pub fn disconnect(&self) {
         todo!()
     }
+}
+// Run the inner bip_receive() function and return when data has been provided for the given
+fn recv(
+    src: &mut bacnet_sys::BACNET_ADDRESS,
+    rx_buf: &mut [u8],
+    request_invoke_id: u8,
+) -> Fallible<()> {
+    const TIMEOUT: u32 = 100; // ms
+    let start = std::time::Instant::now();
+    loop {
+        let pdu_len = unsafe {
+            bacnet_sys::bip_receive(
+                src,
+                rx_buf.as_mut_ptr(),
+                bacnet_sys::MAX_MPDU as u16,
+                TIMEOUT,
+            )
+        };
+        if pdu_len > 0 {
+            unsafe { bacnet_sys::npdu_handler(src, rx_buf.as_mut_ptr(), pdu_len) }
+        }
+        if unsafe { bacnet_sys::tsm_invoke_id_free(request_invoke_id) } {
+            break; // This means we processed the request successfully!
+        }
+        if unsafe { bacnet_sys::tsm_invoke_id_failed(request_invoke_id) } {
+            // An error! Return
+            bail!("TSM timeout");
+        }
+
+        if start.elapsed().as_secs() > 3 {
+            // FIXME(tj): A better timeout here...
+            bail!("APDU timeout");
+        }
+    }
+    Ok(())
 }
 
 impl Drop for BACnetDevice {

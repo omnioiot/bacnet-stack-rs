@@ -9,7 +9,7 @@ pub struct Epics {
 pub struct Object {
     name: String,
     instance: usize,
-    type_: String, // Actually an enum
+    type_: String,     // Actually an enum
     present_value: (), // Option<BACnetValue>,
     unit: String,
 }
