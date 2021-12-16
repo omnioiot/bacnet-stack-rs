@@ -1,3 +1,4 @@
+#![allow(unused_variables, unused_mut)] // XXX Remove
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -187,21 +188,63 @@ impl BACnetDevice {
         let init = std::time::Instant::now();
         let mut src = bacnet_sys::BACNET_ADDRESS::default();
 
-        // There's a whole state machine here...
-        //
-        // Initial -> GetHeadingInfo
 
+        // FIXME Set different callback methods to handle incoming data
+
+        // Getting EPICS relies on a different kind of data processing compared to readprop().
+        //
+        // Initial -> GetHeadingInfo -> GetHeadingResponse -> PrintHeading
+        //
+        // Next, we try the "Get All Request" falling back to getting objects one at a time.
+        //
+        // -> GetAllRequest -> GetAllResponse
+        //
+
+        let mut rx_buf = [0u8; bacnet_sys::MAX_PDU as usize];
         let mut my_object = bacnet_sys::BACNET_OBJECT_ID::default();
         my_object.type_ = bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE;
         my_object.instance = self.device_id;
         let mut rpm_object = bacnet_sys::BACNET_READ_ACCESS_DATA::default();
 
-        // StartNextObject(...)
-        // BuildPropRequest(&rpm_object)
+        // aka StartNextObject(rpm_object, BACNET_OBJECT_ID pNewObject)
+        // Error_Detected = false;
+        // Property_List_Index = 0;
+        // Property_List_Length = 0;
+        rpm_object.object_type = my_object.type_;
+        rpm_object.object_instance = my_object.instance;
+
+        let device_props = [
+            bacnet_sys::BACNET_PROPERTY_ID_PROP_VENDOR_NAME,
+            bacnet_sys::BACNET_PROPERTY_ID_PROP_MODEL_NAME,
+            bacnet_sys::BACNET_PROPERTY_ID_PROP_MAX_APDU_LENGTH_ACCEPTED,
+            bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_SERVICES_SUPPORTED,
+            bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_OBJECT_TYPES_SUPPORTED,
+            bacnet_sys::BACNET_PROPERTY_ID_PROP_DESCRIPTION
+        ];
+        // Build a linked list of BACNET_PROPERTY_REFERENCE
+        let mut list_head = None;
+        for prop in IntoIterator::into_iter(device_props).rev() {
+            let mut new_entry = bacnet_sys::BACNET_PROPERTY_REFERENCE::default();
+            new_entry.propertyIdentifier = prop;
+            new_entry.propertyArrayIndex = bacnet_sys::BACNET_ARRAY_ALL;
+            if let Some(list_head) = list_head {
+                new_entry.next = Box::into_raw(Box::new(list_head));
+            }
+            list_head = Some(new_entry);
+        }
+        let mut rpm_property = bacnet_sys::BACNET_PROPERTY_REFERENCE::default();
+        rpm_object.listOfProperties = Box::into_raw(Box::new(list_head.unwrap()));
+
+        let request_invoke_id = unsafe {
+            bacnet_sys::Send_Read_Property_Multiple_Request(
+                &mut rx_buf as *mut _, bacnet_sys::MAX_APDU as u64, self.device_id, &mut rpm_object
+            )
+        };
+        debug!("request_invoke_id = {}", request_invoke_id);
         // request_invoke_id = Send_Read_Property_Multiple_Request(buffer, MAX_APDU, self.device_id,
 
         debug!("epics() finished in {:?}", init.elapsed());
-        let epics = Epics {};
+        let epics = Epics::default();
         Ok(epics)
     }
 
@@ -315,12 +358,12 @@ extern "C" fn my_readprop_ack_handler(
                 )
             };
             if len >= 0 {
-                //unsafe {
-                //    bacnet_sys::rp_ack_print_data(&mut data);
-                //}
+                // XXX Consider moving data decoding out. We should probably just stick to getting
+                // the raw data, putting it somewhere and let someone else decode it.
                 let decoded = decode_data(data);
                 // Stick the decoded value into the target
-                target.value = Some(decoded);
+                //target.data = Some(data);
+                //target.value = Some(decoded);
             } else {
                 error!("<decode failed>");
                 target.value = Some(Err(format_err!("failed to decode data")));
@@ -394,6 +437,15 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
         }
         _ => bail!("unhandled type tag {:?}", value.tag),
     })
+}
+
+#[no_mangle]
+extern "C" fn my_readpropmultiple_ack_handler(
+    service_request: u16,
+    src: *mut bacnet_sys::BACNET_ADDRESS,
+    service_data: *mut bacnet_sys::BACNET_CONFIRMED_SERVICE_ACK_DATA,
+) {
+    let mut data = bacnet_sys::BACNET_READ_ACCESS_DATA::default();
 }
 
 #[no_mangle]
