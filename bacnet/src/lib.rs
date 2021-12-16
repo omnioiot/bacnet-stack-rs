@@ -280,7 +280,6 @@ fn recv(
 ) -> Fallible<()> {
     const TIMEOUT: u32 = 100; // ms
     let start = std::time::Instant::now();
-    let src = dbg!(src);
     loop {
         let pdu_len = unsafe {
             bacnet_sys::bip_receive(
@@ -291,6 +290,7 @@ fn recv(
             )
         };
         if pdu_len > 0 {
+            println!("{:?}", src);
             unsafe { bacnet_sys::npdu_handler(src, rx_buf.as_mut_ptr(), pdu_len) }
         }
         if unsafe { bacnet_sys::tsm_invoke_id_free(request_invoke_id) } {
