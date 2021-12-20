@@ -16,8 +16,9 @@ use failure::Fallible;
 use epics::Epics;
 use value::BACnetValue;
 
+
 mod epics;
-mod value;
+pub mod value;
 pub mod whois;
 
 static BACNET_STACK_INIT: Once = Once::new();
