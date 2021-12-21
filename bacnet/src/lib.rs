@@ -16,7 +16,6 @@ use failure::Fallible;
 use epics::Epics;
 use value::BACnetValue;
 
-
 mod epics;
 pub mod value;
 pub mod whois;
@@ -270,7 +269,9 @@ impl BACnetDevice {
     }
 
     pub fn disconnect(&self) {
-        todo!()
+        unsafe {
+            bacnet_sys::address_remove_device(self.device_id);
+        }
     }
 }
 // Run the inner bip_receive() function and return when data has been provided for the given
