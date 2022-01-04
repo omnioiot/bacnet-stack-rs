@@ -33,7 +33,7 @@ fn parse_object_type(src: &str) -> Result<bacnet_sys::BACNET_OBJECT_TYPE, String
     } else {
         let mut found_index = 0;
         if unsafe {
-            bacnet_sys::bactext_object_type_strtol(src.as_ptr() as *const i8, &mut found_index)
+            bacnet_sys::bactext_object_type_strtol(src.as_ptr() as *const ::std::os::raw::c_char, &mut found_index)
         } {
             Ok(found_index)
         } else {

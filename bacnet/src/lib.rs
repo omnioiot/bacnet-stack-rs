@@ -248,7 +248,7 @@ impl BACnetDevice {
         let request_invoke_id = unsafe {
             bacnet_sys::Send_Read_Property_Multiple_Request(
                 &mut rx_buf as *mut _,
-                bacnet_sys::MAX_APDU as u64,
+                bacnet_sys::MAX_APDU.into(), // as u64,
                 self.device_id,
                 &mut rpm_object,
             )
