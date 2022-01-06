@@ -248,7 +248,7 @@ impl BACnetDevice {
         let request_invoke_id = unsafe {
             bacnet_sys::Send_Read_Property_Multiple_Request(
                 &mut rx_buf as *mut _,
-                bacnet_sys::MAX_APDU.into(), // as u64,
+                bacnet_sys::MAX_APDU.into(),
                 self.device_id,
                 &mut rpm_object,
             )
@@ -292,7 +292,6 @@ fn recv(
             )
         };
         if pdu_len > 0 {
-            println!("{:?}", src);
             unsafe { bacnet_sys::npdu_handler(src, rx_buf.as_mut_ptr(), pdu_len) }
         }
         if unsafe { bacnet_sys::tsm_invoke_id_free(request_invoke_id) } {
@@ -437,7 +436,6 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
     if len == bacnet_sys::BACNET_STATUS_ERROR {
         bail!("decoding error");
     }
-    println!("decoded {:?}", value.tag);
 
     Ok(match value.tag as u32 {
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_NULL => BACnetValue::Null,
@@ -513,7 +511,7 @@ extern "C" fn my_error_handler(
     let error_code_str = unsafe { CStr::from_ptr(bacnet_sys::bactext_error_code_name(error_code)) }
         .to_string_lossy()
         .into_owned();
-    println!(
+    error!(
         "BACnet error: error_class={} ({}) error_code={} ({})",
         error_class, error_class_str, error_code, error_code_str,
     );
@@ -531,7 +529,7 @@ extern "C" fn my_abort_handler(
     let mut lock = TARGET_ADDRESSES.lock().unwrap();
     if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
         target.request = Some((invoke_id, RequestStatus::Aborted(abort_reason)));
-        println!(
+        error!(
             "aborted invoke_id = {} abort_reason = {}",
             invoke_id, abort_reason
         );
