@@ -22,6 +22,8 @@ struct Opt {
     object_type: bacnet_sys::BACNET_OBJECT_TYPE,
     #[structopt(short = "i", long, default_value = "22")]
     object_instance: u32,
+    #[structopt(short = "p", long, default_value = "present-value", parse(try_from_str = parse_property))]
+    property: u32,
 
     #[structopt(short = "n", long, default_value = "1")]
     number_of_reads: usize,
@@ -33,11 +35,32 @@ fn parse_object_type(src: &str) -> Result<bacnet_sys::BACNET_OBJECT_TYPE, String
     } else {
         let mut found_index = 0;
         if unsafe {
-            bacnet_sys::bactext_object_type_strtol(src.as_ptr() as *const ::std::os::raw::c_char, &mut found_index)
+            bacnet_sys::bactext_object_type_strtol(
+                src.as_ptr() as *const ::std::os::raw::c_char,
+                &mut found_index,
+            )
         } {
             Ok(found_index)
         } else {
             Err(format!("Couldn't parse input '{}' as object-type", src))
+        }
+    }
+}
+
+fn parse_property(src: &str) -> Result<bacnet_sys::BACNET_PROPERTY_ID, String> {
+    if let Ok(t) = src.parse() {
+        Ok(t)
+    } else {
+        let mut found_index = 0;
+        if unsafe {
+            bacnet_sys::bactext_property_strtol(
+                src.as_ptr() as *const ::std::os::raw::c_char,
+                &mut found_index,
+            )
+        } {
+            Ok(found_index)
+        } else {
+            Err(format!("Couldn't parse input '{}' as property", src))
         }
     }
 }
@@ -57,7 +80,7 @@ fn main() {
     match dev.connect() {
         Ok(()) => {
             for _ in 0..opt.number_of_reads {
-                let r = dev.read_prop_present_value(opt.object_type, opt.object_instance);
+                let r = dev.read_prop(opt.object_type, opt.object_instance, opt.property);
                 match r {
                     Ok(_) => println!("result {:?}", r),
                     Err(err) => eprintln!("failed to read property: {}", err),
