@@ -1,5 +1,7 @@
 /// Values that are returned from reading properties.
 ///
+use std::convert::TryInto;
+
 #[derive(Debug)]
 pub enum BACnetValue {
     Null, // Yes!
@@ -11,4 +13,26 @@ pub enum BACnetValue {
     String(String),            // BACNET_CHARACTER_STRING
     Bytes(Vec<u8>),            // BACNET_OCTET_STRING
     Enum(u32, Option<String>), // Enumerated values also have string representations...
+}
+
+impl TryInto<String> for BACnetValue {
+    type Error = failure::Error;
+    fn try_into(self) -> Result<String, Self::Error> {
+        Ok(match self {
+            BACnetValue::String(s) => s,
+            BACnetValue::Enum(_, Some(s)) => s,
+            BACnetValue::Enum(i, None) => format!("{}", i),
+            _ => return Err(format_err!("Cannot turn '{:?}' into a string", self)),
+        })
+    }
+}
+
+impl TryInto<u64> for BACnetValue {
+    type Error = failure::Error;
+    fn try_into(self) -> Result<u64, Self::Error> {
+        Ok(match self {
+            BACnetValue::Uint(u) => u,
+            _ => return Err(format_err!("Cannot turn '{:?}' into a u64", self)),
+        })
+    }
 }

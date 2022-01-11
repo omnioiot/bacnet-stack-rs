@@ -7,6 +7,7 @@ extern crate log;
 extern crate failure;
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::ffi::CStr;
 use std::net::Ipv4Addr;
 use std::sync::{Mutex, Once};
@@ -193,6 +194,84 @@ impl BACnetDevice {
 
         debug!("read_prop() finished in {:?}", init.elapsed());
         ret
+    }
+
+    pub fn simple_epics(&self) -> Fallible<Epics> {
+        let object_type = bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE;
+        let object_instance = self.device_id;
+
+        // Device object properties
+        let object_name = self
+            .read_prop(
+                object_type,
+                object_type,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_NAME,
+            )?
+            .try_into()?;
+        let system_status = None;
+        let vendor_name = self
+            .read_prop(
+                object_type,
+                object_instance,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_VENDOR_NAME,
+            )?
+            .try_into()?;
+        let vendor_identifier = self
+            .read_prop(
+                object_type,
+                object_instance,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_VENDOR_IDENTIFIER,
+            )?
+            .try_into()?;
+        let model_name = self
+            .read_prop(
+                object_type,
+                object_instance,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_MODEL_NAME,
+            )?
+            .try_into()?;
+        let firmware_revision = self
+            .read_prop(
+                object_type,
+                object_instance,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_FIRMWARE_REVISION,
+            )?
+            .try_into()?;
+        let application_software_version = self
+            .read_prop(
+                object_type,
+                object_instance,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_APPLICATION_SOFTWARE_VERSION,
+            )?
+            .try_into()?;
+        let protocol_version = self
+            .read_prop(
+                object_type,
+                object_instance,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_VERSION,
+            )?
+            .try_into()?;
+        let protocol_revision = self
+            .read_prop(
+                object_type,
+                object_instance,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_REVISION,
+            )?
+            .try_into()?;
+
+        let objects = vec![];
+        Ok(Epics {
+            object_name,
+            system_status,
+            vendor_identifier,
+            vendor_name,
+            model_name,
+            firmware_revision,
+            application_software_version,
+            protocol_version,
+            protocol_revision,
+            objects,
+        })
     }
 
     pub fn epics(&self) -> Fallible<Epics> {
