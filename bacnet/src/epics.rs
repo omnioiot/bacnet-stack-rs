@@ -23,19 +23,6 @@ pub struct Object {
     unit: String,
 }
 
-// List of properties to fetch for a device
-pub(crate) const DEVICE_PROPERTIES: [bacnet_sys::BACNET_PROPERTY_ID; 9] = [
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_NAME,
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_SYSTEM_STATUS,
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_VENDOR_NAME,
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_VENDOR_IDENTIFIER,
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_MODEL_NAME,
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_FIRMWARE_REVISION,
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_APPLICATION_SOFTWARE_VERSION,
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_VERSION,
-    bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_REVISION,
-];
-
 // List of properties to fetch for a profile
 pub(crate) const PROFILE_PROPERTIES: [bacnet_sys::BACNET_PROPERTY_ID; 7] = [
     bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_NAME,
