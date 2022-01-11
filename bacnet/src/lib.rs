@@ -638,7 +638,6 @@ fn find_matching_device<'a>(
     src: *mut bacnet_sys::BACNET_ADDRESS,
     invoke_id: RequestInvokeId,
 ) -> Option<&'a mut TargetDevice> {
-    let src = dbg!(src);
 
     for target in guard.values_mut() {
         let is_addr_match = unsafe { bacnet_sys::address_match(&mut target.addr, src) };
