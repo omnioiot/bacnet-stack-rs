@@ -7,6 +7,8 @@
 #include "bacnet-stack-1.0.0/src/bacnet/bacdef.h"
 #include "bacnet-stack-1.0.0/src/bacnet/npdu.h"
 #include "bacnet-stack-1.0.0/src/bacnet/apdu.h"
+#include "bacnet-stack-1.0.0/src/bacnet/proplist.h"
+#include "bacnet-stack-1.0.0/src/bacnet/property.h"
 #include "bacnet-stack-1.0.0/src/bacnet/basic/services.h"
 #include "bacnet-stack-1.0.0/src/bacnet/basic/object/device.h"
 #include "bacnet-stack-1.0.0/src/bacnet/basic/tsm/tsm.h"

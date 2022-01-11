@@ -196,6 +196,23 @@ impl BACnetDevice {
         ret
     }
 
+    pub fn read_properties(&self) {
+        let mut special_property_list = bacnet_sys::special_property_list_t::default();
+
+        unsafe {
+            bacnet_sys::property_list_special(
+                bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE,
+                &mut special_property_list,
+            );
+        }
+
+        let mut len = special_property_list.Required.count;
+        for i in 0..len {
+            let p: i32 = unsafe { *special_property_list.Required.pList.offset(i as isize) };
+            println!("Required property {}", p);
+        }
+    }
+
     pub fn simple_epics(&self) -> Fallible<Epics> {
         let object_type = bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE;
         let object_instance = self.device_id;
@@ -633,12 +650,15 @@ extern "C" fn my_reject_handler(
     }
 }
 
+// Holding the lock on the global map of devices, find a device that matches `src` and the given
+// RequestInvokeId.
+//
+// This function _should_ return something.
 fn find_matching_device<'a>(
     guard: &'a mut std::sync::MutexGuard<'_, HashMap<u32, TargetDevice>>,
     src: *mut bacnet_sys::BACNET_ADDRESS,
     invoke_id: RequestInvokeId,
 ) -> Option<&'a mut TargetDevice> {
-
     for target in guard.values_mut() {
         let is_addr_match = unsafe { bacnet_sys::address_match(&mut target.addr, src) };
         if let Some((request_invoke_id, _)) = &target.request {

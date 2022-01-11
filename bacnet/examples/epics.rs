@@ -32,12 +32,15 @@ fn main() {
 
     println!("{:?}", dev);
     match dev.connect() {
-        Ok(()) => match dev.simple_epics() {
-            Ok(epics) => {
-                println!("Got epics {:?}", epics);
+        Ok(()) => {
+            match dev.simple_epics() {
+                Ok(epics) => {
+                    println!("Got epics {:#?}", epics);
+                }
+                Err(err) => eprintln!("failed to read property: {}", err),
             }
-            Err(err) => eprintln!("failed to read property: {}", err),
-        },
+            dev.read_properties();
+        }
         Err(err) => {
             eprintln!("failed to connect to device... {}", err);
         }
