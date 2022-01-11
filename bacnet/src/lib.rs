@@ -607,10 +607,14 @@ extern "C" fn my_abort_handler(
     let _ = src;
     let mut lock = TARGET_ADDRESSES.lock().unwrap();
     if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
+        let abort_text =
+            unsafe { CStr::from_ptr(bacnet_sys::bactext_abort_reason_name(abort_reason as u32)) }
+                .to_string_lossy()
+                .into_owned();
         target.request = Some((invoke_id, RequestStatus::Aborted(abort_reason)));
         error!(
-            "aborted invoke_id = {} abort_reason = {}",
-            invoke_id, abort_reason
+            "aborted invoke_id = {} abort_reason = {} ({})",
+            invoke_id, abort_text, abort_reason
         );
     }
 }
