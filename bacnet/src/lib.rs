@@ -6,8 +6,8 @@ extern crate log;
 #[macro_use]
 extern crate failure;
 
+use std::cmp::min;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::ffi::CStr;
 use std::net::Ipv4Addr;
 use std::sync::{Mutex, Once};
@@ -32,6 +32,17 @@ lazy_static! {
     /// connected to and communicating with.
     static ref TARGET_ADDRESSES: Mutex<HashMap<DeviceId, TargetDevice>> = Mutex::new(HashMap::new());
 }
+
+//// Epics property list
+//lazy_static! {
+//    static ref PROPERTY_LIST: Mutex<
+//}
+//
+//struct PropertyList {
+//    length: u32,
+//    index: u32,
+//    list: [130; i32],
+//}
 
 // Status of a request
 enum RequestStatus {
@@ -196,99 +207,42 @@ impl BACnetDevice {
         ret
     }
 
-    pub fn read_properties(&self) {
+    pub fn read_properties(
+        &self,
+        object_type: bacnet_sys::BACNET_OBJECT_TYPE,
+        object_instance: u32,
+    ) {
         let mut special_property_list = bacnet_sys::special_property_list_t::default();
 
+        // Fetch all the properties that are known to be required here.
         unsafe {
-            bacnet_sys::property_list_special(
-                bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE,
-                &mut special_property_list,
-            );
+            bacnet_sys::property_list_special(object_type, &mut special_property_list);
         }
 
-        let mut len = special_property_list.Required.count;
+        let len = min(special_property_list.Required.count, 130);
         for i in 0..len {
-            let p: i32 = unsafe { *special_property_list.Required.pList.offset(i as isize) };
-            println!("Required property {}", p);
+            let prop = unsafe { *special_property_list.Required.pList.offset(i as isize) };
+
+            // Send read_prop request, put result in map
+            // TODO(tj): Get the property name
+            let prop_name =
+                unsafe { CStr::from_ptr(bacnet_sys::bactext_property_name(prop as u32)) }
+                    .to_string_lossy()
+                    .into_owned();
+            println!("Required property {} ({})", prop_name, prop);
+            match self.read_prop(object_type, object_instance, prop as u32) {
+                Ok(v) => println!("OK. Got value {:?}", v),
+                Err(err) => {
+                    error!("Failed to get property {}", err);
+                }
+            }
         }
     }
 
     pub fn simple_epics(&self) -> Fallible<Epics> {
-        let object_type = bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE;
-        let object_instance = self.device_id;
+        self.read_properties(bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE, self.device_id);
 
-        // Device object properties
-        let object_name = self
-            .read_prop(
-                object_type,
-                object_type,
-                bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_NAME,
-            )?
-            .try_into()?;
-        let system_status = None;
-        let vendor_name = self
-            .read_prop(
-                object_type,
-                object_instance,
-                bacnet_sys::BACNET_PROPERTY_ID_PROP_VENDOR_NAME,
-            )?
-            .try_into()?;
-        let vendor_identifier = self
-            .read_prop(
-                object_type,
-                object_instance,
-                bacnet_sys::BACNET_PROPERTY_ID_PROP_VENDOR_IDENTIFIER,
-            )?
-            .try_into()?;
-        let model_name = self
-            .read_prop(
-                object_type,
-                object_instance,
-                bacnet_sys::BACNET_PROPERTY_ID_PROP_MODEL_NAME,
-            )?
-            .try_into()?;
-        let firmware_revision = self
-            .read_prop(
-                object_type,
-                object_instance,
-                bacnet_sys::BACNET_PROPERTY_ID_PROP_FIRMWARE_REVISION,
-            )?
-            .try_into()?;
-        let application_software_version = self
-            .read_prop(
-                object_type,
-                object_instance,
-                bacnet_sys::BACNET_PROPERTY_ID_PROP_APPLICATION_SOFTWARE_VERSION,
-            )?
-            .try_into()?;
-        let protocol_version = self
-            .read_prop(
-                object_type,
-                object_instance,
-                bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_VERSION,
-            )?
-            .try_into()?;
-        let protocol_revision = self
-            .read_prop(
-                object_type,
-                object_instance,
-                bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_REVISION,
-            )?
-            .try_into()?;
-
-        let objects = vec![];
-        Ok(Epics {
-            object_name,
-            system_status,
-            vendor_identifier,
-            vendor_name,
-            model_name,
-            firmware_revision,
-            application_software_version,
-            protocol_version,
-            protocol_revision,
-            objects,
-        })
+        bail!("Not yet implemented");
     }
 
     pub fn epics(&self) -> Fallible<Epics> {
