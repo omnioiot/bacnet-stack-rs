@@ -39,7 +39,6 @@ fn main() {
                 }
                 Err(err) => eprintln!("failed to read property: {}", err),
             }
-            dev.read_properties();
         }
         Err(err) => {
             eprintln!("failed to connect to device... {}", err);
