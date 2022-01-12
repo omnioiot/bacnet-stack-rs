@@ -142,7 +142,12 @@ impl BACnetDevice {
         object_instance: u32,
         property_id: ObjectPropertyId,
     ) -> Fallible<BACnetValue> {
-        self.read_prop_at(object_type, object_instance, property_id, bacnet_sys::BACNET_ARRAY_ALL)
+        self.read_prop_at(
+            object_type,
+            object_instance,
+            property_id,
+            bacnet_sys::BACNET_ARRAY_ALL,
+        )
     }
 
     pub fn read_prop_at(
@@ -239,10 +244,9 @@ impl BACnetDevice {
             let prop = unsafe { *special_property_list.Required.pList.offset(i as isize) } as u32;
 
             if log_enabled!(log::Level::Debug) {
-                let prop_name =
-                    unsafe { CStr::from_ptr(bacnet_sys::bactext_property_name(prop)) }
-                        .to_string_lossy()
-                        .into_owned();
+                let prop_name = unsafe { CStr::from_ptr(bacnet_sys::bactext_property_name(prop)) }
+                    .to_string_lossy()
+                    .into_owned();
                 debug!("Required property {} ({})", prop_name, prop);
             }
             if prop == bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_LIST {
@@ -265,8 +269,10 @@ impl BACnetDevice {
     }
 
     pub fn simple_epics(&self) -> Fallible<Epics> {
-        self.read_properties(bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE, self.device_id);
+        let device_props =
+            self.read_properties(bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE, self.device_id);
 
+        println!("{:#?}", device_props);
         bail!("Not yet implemented");
     }
 
