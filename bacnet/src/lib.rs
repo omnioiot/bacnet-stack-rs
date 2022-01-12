@@ -142,6 +142,16 @@ impl BACnetDevice {
         object_instance: u32,
         property_id: ObjectPropertyId,
     ) -> Fallible<BACnetValue> {
+        self.read_prop_at(object_type, object_instance, property_id, bacnet_sys::BACNET_ARRAY_ALL)
+    }
+
+    pub fn read_prop_at(
+        &self,
+        object_type: ObjectType,
+        object_instance: u32,
+        property_id: ObjectPropertyId,
+        index: u32,
+    ) -> Fallible<BACnetValue> {
         let init = std::time::Instant::now();
         const TIMEOUT: u32 = 100;
         let request_invoke_id =
@@ -152,7 +162,7 @@ impl BACnetDevice {
                         object_type,
                         object_instance,
                         property_id,
-                        bacnet_sys::BACNET_ARRAY_ALL,
+                        index,
                     )
                 };
                 h.request = Some((request_invoke_id, RequestStatus::Ongoing));
@@ -207,11 +217,15 @@ impl BACnetDevice {
         ret
     }
 
+    /// Read all required properties for a given object-type and object-instance
+    ///
+    /// The BACnet stack internally has a list of required properties for a given object-type, and
+    /// this function will simply walk over every single one and call `read_prop()` on it.
     pub fn read_properties(
         &self,
         object_type: bacnet_sys::BACNET_OBJECT_TYPE,
         object_instance: u32,
-    ) {
+    ) -> HashMap<u32, BACnetValue> {
         let mut special_property_list = bacnet_sys::special_property_list_t::default();
 
         // Fetch all the properties that are known to be required here.
@@ -220,23 +234,34 @@ impl BACnetDevice {
         }
 
         let len = min(special_property_list.Required.count, 130);
+        let mut ret = HashMap::with_capacity(len as usize);
         for i in 0..len {
-            let prop = unsafe { *special_property_list.Required.pList.offset(i as isize) };
+            let prop = unsafe { *special_property_list.Required.pList.offset(i as isize) } as u32;
 
-            // Send read_prop request, put result in map
-            // TODO(tj): Get the property name
-            let prop_name =
-                unsafe { CStr::from_ptr(bacnet_sys::bactext_property_name(prop as u32)) }
-                    .to_string_lossy()
-                    .into_owned();
-            println!("Required property {} ({})", prop_name, prop);
-            match self.read_prop(object_type, object_instance, prop as u32) {
-                Ok(v) => println!("OK. Got value {:?}", v),
+            if log_enabled!(log::Level::Debug) {
+                let prop_name =
+                    unsafe { CStr::from_ptr(bacnet_sys::bactext_property_name(prop)) }
+                        .to_string_lossy()
+                        .into_owned();
+                debug!("Required property {} ({})", prop_name, prop);
+            }
+            if prop == bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_LIST {
+                // This particular property we will not try to read in one go, instead we'll resort
+                // to reading it an item at a time.
+                continue;
+            }
+            match self.read_prop(object_type, object_instance, prop) {
+                Ok(v) => {
+                    debug!("OK. Got value {:?}", v);
+                    ret.insert(prop, v);
+                }
                 Err(err) => {
                     error!("Failed to get property {}", err);
                 }
             }
         }
+
+        ret
     }
 
     pub fn simple_epics(&self) -> Fallible<Epics> {
