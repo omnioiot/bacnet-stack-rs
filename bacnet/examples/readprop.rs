@@ -82,7 +82,12 @@ fn main() {
     match dev.connect() {
         Ok(()) => {
             for _ in 0..opt.number_of_reads {
-                let r = dev.read_prop_at(opt.object_type, opt.object_instance, opt.property, opt.index);
+                let r = dev.read_prop_at(
+                    opt.object_type,
+                    opt.object_instance,
+                    opt.property,
+                    opt.index,
+                );
                 match r {
                     Ok(_) => println!("result {:?}", r),
                     Err(err) => eprintln!("failed to read property: {}", err),

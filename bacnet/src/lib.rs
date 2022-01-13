@@ -10,6 +10,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::net::Ipv4Addr;
+use std::os::raw::c_char;
 use std::sync::{Mutex, Once};
 
 use failure::Fallible;
@@ -564,7 +565,11 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
             let s = None;
             BACnetValue::Enum(unsafe { value.type_.Enumerated }, s)
         }
-        _ => bail!("unhandled type tag {:?}", value.tag),
+        _ => {
+            let tag_name =
+                cstr(unsafe { bacnet_sys::bactext_application_tag_name(value.tag as u32) });
+            bail!("unhandled type tag {} ({:?})", tag_name, value.tag);
+        }
     })
 }
 
@@ -633,6 +638,12 @@ extern "C" fn my_reject_handler(
     if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
         target.request = Some((invoke_id, RequestStatus::Rejected(reject_reason)));
     }
+}
+
+fn cstr(ptr: *const c_char) -> String {
+    unsafe { CStr::from_ptr(ptr) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 // Holding the lock on the global map of devices, find a device that matches `src` and the given
