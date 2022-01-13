@@ -606,8 +606,14 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
         }
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_BIT_STRING => {
             let nbits = unsafe { bacnet_sys::bitstring_bits_used(&mut value.type_.Bit_String) };
-            info!("Number of bits: {}", nbits);
-            let bits = vec![];
+            // info!("Number of bits: {}", nbits);
+
+            let mut bits = vec![];
+            for i in 0..nbits {
+                let bit = unsafe { bacnet_sys::bitstring_bit(&mut value.type_.Bit_String, i) };
+                bits.push(bit);
+            }
+
             BACnetValue::BitString(bits)
         }
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_ENUMERATED => {

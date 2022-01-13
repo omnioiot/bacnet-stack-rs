@@ -10,8 +10,8 @@ pub enum BACnetValue {
     Int(i32),
     Real(f32),
     Double(f64),
-    String(String),            // BACNET_CHARACTER_STRING
-    Bytes(Vec<u8>),            // BACNET_OCTET_STRING
+    String(String), // BACNET_CHARACTER_STRING
+    Bytes(Vec<u8>), // BACNET_OCTET_STRING
     BitString(Vec<bool>),
     Enum(u32, Option<String>), // Enumerated values also have string representations...
     // A reference to an object, used during interrogation of the device (object-list)
