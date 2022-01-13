@@ -232,7 +232,7 @@ impl BACnetDevice {
         &self,
         object_type: bacnet_sys::BACNET_OBJECT_TYPE,
         object_instance: u32,
-    ) -> HashMap<u32, BACnetValue> {
+    ) -> HashMap<ObjectPropertyId, BACnetValue> {
         let mut special_property_list = bacnet_sys::special_property_list_t::default();
 
         // Fetch all the properties that are known to be required here.
