@@ -13,6 +13,11 @@ pub enum BACnetValue {
     String(String),            // BACNET_CHARACTER_STRING
     Bytes(Vec<u8>),            // BACNET_OCTET_STRING
     Enum(u32, Option<String>), // Enumerated values also have string representations...
+    // A reference to an object, used during interrogation of the device (object-list)
+    ObjectId {
+        object_type: u32,
+        object_instance: u32,
+    },
 }
 
 impl TryInto<String> for BACnetValue {
