@@ -284,18 +284,34 @@ impl BACnetDevice {
 
         let mut object_ids = Vec::with_capacity(len as usize);
         for i in 1..len + 1 {
-            let object_id = self.read_prop_at(
+            match self.read_prop_at(
                 bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE,
                 self.device_id,
                 bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_LIST,
                 i as u32,
-            )?;
-            object_ids.push(object_id);
+            )? {
+                BACnetValue::ObjectId {
+                    object_type,
+                    object_instance,
+                } => {
+                    object_ids.push((object_type, object_instance));
+                }
+                v => error!("Unexpected type when reading object-list {:?}", v),
+            }
         }
 
         println!("{:#?}", device_props);
         println!("object-list has {} elements", len);
         println!("{:#?}", object_ids);
+
+        for (object_type, object_instance) in object_ids {
+            let object_props = self.read_properties(object_type, object_instance);
+            println!(
+                "object = {:?} {:#?}",
+                (object_type, object_instance),
+                object_props
+            );
+        }
         bail!("Not yet implemented");
     }
 
