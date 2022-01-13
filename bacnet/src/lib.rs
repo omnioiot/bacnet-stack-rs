@@ -604,6 +604,12 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
             });
             BACnetValue::String(s)
         }
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_BIT_STRING => {
+            let nbits = unsafe { bacnet_sys::bitstring_bits_used(&mut value.type_.Bit_String) };
+            info!("Number of bits: {}", nbits);
+            let bits = vec![];
+            BACnetValue::BitString(bits)
+        }
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_ENUMERATED => {
             // FIXME(tj): Find the string representation of the enum (if possible).
             // See bacapp.c:1200
