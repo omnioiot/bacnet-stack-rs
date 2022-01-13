@@ -26,6 +26,7 @@ pub struct Object {
     unit: String,
 }
 
+#[derive(Debug, Default)]
 pub struct SimpleEpics {
     pub device: HashMap<String, BACnetValue>,
     pub object_list: Vec<HashMap<String, BACnetValue>>,
