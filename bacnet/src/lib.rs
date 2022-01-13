@@ -304,14 +304,17 @@ impl BACnetDevice {
         println!("object-list has {} elements", len);
         println!("{:#?}", object_ids);
 
+        let mut objects = Vec::with_capacity(len as usize);
         for (object_type, object_instance) in object_ids {
             let object_props = self.read_properties(object_type, object_instance);
-            println!(
-                "object = {:?} {:#?}",
-                (object_type, object_instance),
-                object_props
-            );
+            //println!(
+            //    "object = {:?} {:#?}",
+            //    (object_type, object_instance),
+            //    object_props
+            //);
+            objects.push(object_props);
         }
+        println!("Objects:\n{:#?}", objects);
         bail!("Not yet implemented");
     }
 
