@@ -8,6 +8,7 @@ extern crate failure;
 
 use std::cmp::min;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::ffi::CStr;
 use std::net::Ipv4Addr;
 use std::os::raw::c_char;
@@ -271,7 +272,18 @@ impl BACnetDevice {
         let device_props =
             self.read_properties(bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE, self.device_id);
 
+        // Read the object-list
+        let len: u64 = self
+            .read_prop_at(
+                bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE,
+                self.device_id,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_LIST,
+                0,
+            )?
+            .try_into()?;
+
         println!("{:#?}", device_props);
+        println!("object-list has {} elements", len);
         bail!("Not yet implemented");
     }
 
@@ -561,27 +573,12 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_OBJECT_ID => {
             // Store the object list, so we can interrogate each object
 
-            // encode object key
-            //const KEY_TYPE_OFFSET: u32 = 22;
-            //const KEY_TYPE_MASK: u32 = 0x000003FF;
-            //const KEY_ID_MASK: u32 = 0x003FFFFF;
-            //const KEY_ID_MAX: u32 = KEY_ID_MASK + 1;
-            //const KEY_TYPE_MAX: u32 = KEY_TYPE_MASK + 1;
-
-            // key encode
             let object_type = unsafe { value.type_.Object_Id.type_ };
             let object_instance = unsafe { value.type_.Object_Id.instance };
             BACnetValue::ObjectId {
                 object_type,
                 object_instance,
             }
-            //let key = (type_ & KEY_TYPE_MASK) << KEY_TYPE_OFFSET | (id & KEY_ID_MASK);
-            //bail!(
-            //    "Got object with type {} and ID {}, key = {}",
-            //    type_,
-            //    id,
-            //    key
-            //);
         }
         _ => {
             let tag_name =
