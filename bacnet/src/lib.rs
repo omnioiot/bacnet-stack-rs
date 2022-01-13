@@ -282,8 +282,20 @@ impl BACnetDevice {
             )?
             .try_into()?;
 
+        let mut object_ids = Vec::with_capacity(len as usize);
+        for i in 1..len + 1 {
+            let object_id = self.read_prop_at(
+                bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE,
+                self.device_id,
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_LIST,
+                i as u32,
+            )?;
+            object_ids.push(object_id);
+        }
+
         println!("{:#?}", device_props);
         println!("object-list has {} elements", len);
+        println!("{:#?}", object_ids);
         bail!("Not yet implemented");
     }
 
