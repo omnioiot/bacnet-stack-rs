@@ -558,6 +558,27 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
             let s = None;
             BACnetValue::Enum(unsafe { value.type_.Enumerated }, s)
         }
+        bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_OBJECT_ID => {
+            // Store the object list, so we can interrogate each object
+
+            // encode object key
+            const KEY_TYPE_OFFSET: u32 = 22;
+            const KEY_TYPE_MASK: u32 = 0x000003FF;
+            const KEY_ID_MASK: u32 = 0x003FFFFF;
+            const KEY_ID_MAX: u32 = KEY_ID_MASK + 1;
+            const KEY_TYPE_MAX: u32 = KEY_TYPE_MASK + 1;
+
+            // key encode
+            let type_ = unsafe { value.type_.Object_Id.type_ };
+            let id = unsafe { value.type_.Object_Id.instance };
+            let key = (type_ & KEY_TYPE_MASK) << KEY_TYPE_OFFSET | (id & KEY_ID_MASK);
+            bail!(
+                "Got object with type {} and ID {}, key = {}",
+                type_,
+                id,
+                key
+            );
+        }
         _ => {
             let tag_name =
                 cstr(unsafe { bacnet_sys::bactext_application_tag_name(value.tag as u32) });
