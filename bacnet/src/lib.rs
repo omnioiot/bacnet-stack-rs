@@ -245,9 +245,7 @@ impl BACnetDevice {
             let prop = unsafe { *special_property_list.Required.pList.offset(i as isize) } as u32;
 
             if log_enabled!(log::Level::Debug) {
-                let prop_name = unsafe { CStr::from_ptr(bacnet_sys::bactext_property_name(prop)) }
-                    .to_string_lossy()
-                    .into_owned();
+                let prop_name = cstr(unsafe { bacnet_sys::bactext_property_name(prop) });
                 debug!("Required property {} ({})", prop_name, prop);
             }
             if prop == bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_LIST {
@@ -542,15 +540,10 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
             // For now just assume UTF-8 bytes, but we really should respect encodings...
             //
             // FIXME(tj): Look at value.type_.Character_String.encoding
-            let s = unsafe {
-                CStr::from_ptr(
-                    value.type_.Character_String.value
-                        [0..value.type_.Character_String.length as usize]
-                        .as_ptr(),
-                )
-                .to_string_lossy()
-                .into_owned()
-            };
+            let s = cstr(unsafe {
+                value.type_.Character_String.value[0..value.type_.Character_String.length as usize]
+                    .as_ptr()
+            });
             BACnetValue::String(s)
         }
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_ENUMERATED => {
@@ -590,13 +583,8 @@ extern "C" fn my_error_handler(
     error_code: bacnet_sys::BACNET_ERROR_CODE,
 ) {
     // TODO(tj): address_match(&Target_Address, src) && invoke_id == Request_Invoke_ID
-    let error_class_str =
-        unsafe { CStr::from_ptr(bacnet_sys::bactext_error_class_name(error_class)) }
-            .to_string_lossy()
-            .into_owned();
-    let error_code_str = unsafe { CStr::from_ptr(bacnet_sys::bactext_error_code_name(error_code)) }
-        .to_string_lossy()
-        .into_owned();
+    let error_class_str = cstr(unsafe { bacnet_sys::bactext_error_class_name(error_class) });
+    let error_code_str = cstr(unsafe { bacnet_sys::bactext_error_code_name(error_code) });
     error!(
         "BACnet error: error_class={} ({}) error_code={} ({})",
         error_class, error_class_str, error_code, error_code_str,
@@ -615,9 +603,7 @@ extern "C" fn my_abort_handler(
     let mut lock = TARGET_ADDRESSES.lock().unwrap();
     if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
         let abort_text =
-            unsafe { CStr::from_ptr(bacnet_sys::bactext_abort_reason_name(abort_reason as u32)) }
-                .to_string_lossy()
-                .into_owned();
+            cstr(unsafe { bacnet_sys::bactext_abort_reason_name(abort_reason as u32) });
         target.request = Some((invoke_id, RequestStatus::Aborted(abort_reason)));
         error!(
             "aborted invoke_id = {} abort_reason = {} ({})",
