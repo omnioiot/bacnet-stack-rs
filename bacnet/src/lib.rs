@@ -16,7 +16,7 @@ use std::sync::{Mutex, Once};
 
 use failure::Fallible;
 
-use epics::Epics;
+use epics::{Epics, SimpleEpics};
 use value::BACnetValue;
 
 mod epics;
@@ -268,7 +268,7 @@ impl BACnetDevice {
         ret
     }
 
-    pub fn simple_epics(&self) -> Fallible<Epics> {
+    pub fn simple_epics(&self) -> Fallible<SimpleEpics> {
         let device_props =
             self.read_properties(bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE, self.device_id);
 
@@ -307,15 +307,30 @@ impl BACnetDevice {
         let mut objects = Vec::with_capacity(len as usize);
         for (object_type, object_instance) in object_ids {
             let object_props = self.read_properties(object_type, object_instance);
-            //println!(
-            //    "object = {:?} {:#?}",
-            //    (object_type, object_instance),
-            //    object_props
-            //);
             objects.push(object_props);
         }
         println!("Objects:\n{:#?}", objects);
-        bail!("Not yet implemented");
+
+        // Populate the SimpleEpics
+        let device = device_props
+            .into_iter()
+            .map(|(id, val)| (cstr(unsafe { bacnet_sys::bactext_property_name(id) }), val))
+            .collect::<HashMap<_, _>>();
+
+        let object_list = objects
+            .into_iter()
+            .map(|obj| {
+                obj.into_iter()
+                    .map(|(id, val)| (cstr(unsafe { bacnet_sys::bactext_property_name(id) }), val))
+                    .collect::<HashMap<_, _>>()
+            })
+            .collect::<Vec<_>>();
+
+        Ok(SimpleEpics {
+            device,
+            object_list,
+        })
+        //bail!("Not yet implemented");
     }
 
     pub fn epics(&self) -> Fallible<Epics> {
