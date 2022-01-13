@@ -24,6 +24,8 @@ struct Opt {
     object_instance: u32,
     #[structopt(short = "p", long, default_value = "present-value", parse(try_from_str = parse_property))]
     property: u32,
+    #[structopt(short = "I", long, default_value = "0")]
+    index: u32,
 
     #[structopt(short = "n", long, default_value = "1")]
     number_of_reads: usize,
@@ -76,11 +78,16 @@ fn main() {
         .port(opt.port)
         .build();
 
+    let index = if opt.index == 0 {
+        bacnet_sys::BACNET_ARRAY_ALL
+    } else {
+        opt.index
+    };
     println!("{:?}", dev);
     match dev.connect() {
         Ok(()) => {
             for _ in 0..opt.number_of_reads {
-                let r = dev.read_prop(opt.object_type, opt.object_instance, opt.property);
+                let r = dev.read_prop_at(opt.object_type, opt.object_instance, opt.property, index);
                 match r {
                     Ok(_) => println!("result {:?}", r),
                     Err(err) => eprintln!("failed to read property: {}", err),
