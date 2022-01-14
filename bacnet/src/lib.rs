@@ -16,7 +16,7 @@ use std::sync::{Mutex, Once};
 
 use failure::Fallible;
 
-use epics::{Epics, SimpleEpics};
+pub use epics::{Epics, SimpleEpics};
 use value::BACnetValue;
 
 mod epics;
