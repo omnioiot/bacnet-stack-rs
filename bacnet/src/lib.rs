@@ -371,9 +371,9 @@ impl BACnetDevice {
         ];
         // Build a linked list of BACNET_PROPERTY_REFERENCE
         let mut list_head = None;
-        for prop in IntoIterator::into_iter(device_props).rev() {
+        for prop in IntoIterator::into_iter(&device_props).rev() {
             let mut new_entry = bacnet_sys::BACNET_PROPERTY_REFERENCE::default();
-            new_entry.propertyIdentifier = prop;
+            new_entry.propertyIdentifier = *prop;
             new_entry.propertyArrayIndex = bacnet_sys::BACNET_ARRAY_ALL;
             if let Some(list_head) = list_head {
                 new_entry.next = Box::into_raw(Box::new(list_head));
