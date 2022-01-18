@@ -625,8 +625,102 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
             // int bacapp_snprintf_value(char *str, size_t str_len, BACNET_OBJECT_PROPERTY_VALUE *object_value)
             //
             // It should return the numbers of characters written so we can permute it to a String
-            let s = None;
-            BACnetValue::Enum(unsafe { value.type_.Enumerated }, s)
+            let enum_val = unsafe { value.type_.Enumerated };
+            let s = match data.object_property {
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_UNITS => {
+                    if enum_val < 256 {
+                        Some(cstr(unsafe { bacnet_sys::bactext_engineering_unit_name(enum_val) }))
+                    } else {
+                        None
+                    }
+                }
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_TYPE => {
+                    if enum_val < bacnet_sys::MAX_ASHRAE_OBJECT_TYPE {
+                        Some(cstr(unsafe { bacnet_sys::bactext_object_type_name(enum_val) }))
+                    } else {
+                        None // Either "reserved" or "proprietary"
+                    }
+                }
+                _ => None
+            };
+
+            //switch (property) {
+            //    case PROP_PROPERTY_LIST:
+            //        char_str = (char *)bactext_property_name_default(
+            //            value->type.Enumerated, NULL);
+            //        if (char_str) {
+            //            ret_val = snprintf(str, str_len, "%s", char_str);
+            //        } else {
+            //            ret_val = snprintf(str, str_len, "%lu",
+            //                (unsigned long)value->type.Enumerated);
+            //        }
+            //        break;
+            //    case PROP_OBJECT_TYPE:
+            //        if (value->type.Enumerated < MAX_ASHRAE_OBJECT_TYPE) {
+            //            ret_val = snprintf(str, str_len, "%s",
+            //                bactext_object_type_name(
+            //                    value->type.Enumerated));
+            //        } else if (value->type.Enumerated < 128) {
+            //            ret_val = snprintf(str, str_len, "reserved %lu",
+            //                (unsigned long)value->type.Enumerated);
+            //        } else {
+            //            ret_val = snprintf(str, str_len, "proprietary %lu",
+            //                (unsigned long)value->type.Enumerated);
+            //        }
+            //        break;
+            //    case PROP_EVENT_STATE:
+            //        ret_val = snprintf(str, str_len, "%s",
+            //            bactext_event_state_name(value->type.Enumerated));
+            //        break;
+            //    case PROP_UNITS:
+            //        if (value->type.Enumerated < 256) {
+            //            ret_val = snprintf(str, str_len, "%s",
+            //                bactext_engineering_unit_name(
+            //                    value->type.Enumerated));
+            //        } else {
+            //            ret_val = snprintf(str, str_len, "proprietary %lu",
+            //                (unsigned long)value->type.Enumerated);
+            //        }
+            //        break;
+            //    case PROP_POLARITY:
+            //        ret_val = snprintf(str, str_len, "%s",
+            //            bactext_binary_polarity_name(
+            //                value->type.Enumerated));
+            //        break;
+            //    case PROP_PRESENT_VALUE:
+            //    case PROP_RELINQUISH_DEFAULT:
+            //        if (object_type < OBJECT_PROPRIETARY_MIN) {
+            //            ret_val = snprintf(str, str_len, "%s",
+            //                bactext_binary_present_value_name(
+            //                    value->type.Enumerated));
+            //        } else {
+            //            ret_val = snprintf(str, str_len, "%lu",
+            //                (unsigned long)value->type.Enumerated);
+            //        }
+            //        break;
+            //    case PROP_RELIABILITY:
+            //        ret_val = snprintf(str, str_len, "%s",
+            //            bactext_reliability_name(value->type.Enumerated));
+            //        break;
+            //    case PROP_SYSTEM_STATUS:
+            //        ret_val = snprintf(str, str_len, "%s",
+            //            bactext_device_status_name(value->type.Enumerated));
+            //        break;
+            //    case PROP_SEGMENTATION_SUPPORTED:
+            //        ret_val = snprintf(str, str_len, "%s",
+            //            bactext_segmentation_name(value->type.Enumerated));
+            //        break;
+            //    case PROP_NODE_TYPE:
+            //        ret_val = snprintf(str, str_len, "%s",
+            //            bactext_node_type_name(value->type.Enumerated));
+            //        break;
+            //    default:
+            //        ret_val = snprintf(str, str_len, "%lu",
+            //            (unsigned long)value->type.Enumerated);
+            //        break;
+            //}
+
+            BACnetValue::Enum(enum_val, s)
         }
         bacnet_sys::BACNET_APPLICATION_TAG_BACNET_APPLICATION_TAG_OBJECT_ID => {
             // Store the object list, so we can interrogate each object
