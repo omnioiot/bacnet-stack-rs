@@ -629,19 +629,33 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
             let s = match data.object_property {
                 bacnet_sys::BACNET_PROPERTY_ID_PROP_UNITS => {
                     if enum_val < 256 {
-                        Some(cstr(unsafe { bacnet_sys::bactext_engineering_unit_name(enum_val) }))
+                        Some(cstr(unsafe {
+                            bacnet_sys::bactext_engineering_unit_name(enum_val)
+                        }))
                     } else {
                         None
                     }
                 }
                 bacnet_sys::BACNET_PROPERTY_ID_PROP_OBJECT_TYPE => {
                     if enum_val < bacnet_sys::MAX_ASHRAE_OBJECT_TYPE {
-                        Some(cstr(unsafe { bacnet_sys::bactext_object_type_name(enum_val) }))
+                        Some(cstr(unsafe {
+                            bacnet_sys::bactext_object_type_name(enum_val)
+                        }))
                     } else {
                         None // Either "reserved" or "proprietary"
                     }
                 }
-                _ => None
+                bacnet_sys::BACNET_PROPERTY_ID_PROP_PRESENT_VALUE
+                | bacnet_sys::BACNET_PROPERTY_ID_PROP_RELINQUISH_DEFAULT => {
+                    if data.object_type < bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_PROPRIETARY_MIN {
+                        Some(cstr(unsafe {
+                            bacnet_sys::bactext_binary_present_value_name(enum_val)
+                        }))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
             };
 
             //switch (property) {
