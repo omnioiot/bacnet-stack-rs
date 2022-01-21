@@ -32,7 +32,7 @@ fn main() {
 
     println!("{:?}", dev);
     match dev.connect() {
-        Ok(()) => match dev.simple_epics() {
+        Ok(()) => match dev.epics() {
             Ok(epics) => {
                 println!("Got epics {:#?}", epics);
             }

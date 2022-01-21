@@ -16,7 +16,7 @@ use std::sync::{Mutex, Once};
 
 use failure::Fallible;
 
-pub use epics::{Epics, SimpleEpics};
+pub use epics::Epics;
 use value::BACnetValue;
 
 mod epics;
@@ -268,7 +268,8 @@ impl BACnetDevice {
         ret
     }
 
-    pub fn simple_epics(&self) -> Fallible<SimpleEpics> {
+    /// Scan the device for all available tags and produce an `Epics` object
+    pub fn epics(&self) -> Fallible<Epics> {
         let device_props =
             self.read_properties(bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE, self.device_id);
 
@@ -300,18 +301,18 @@ impl BACnetDevice {
             }
         }
 
-        println!("{:#?}", device_props);
-        println!("object-list has {} elements", len);
-        println!("{:#?}", object_ids);
+        debug!("{:#?}", device_props);
+        debug!("object-list has {} elements", len);
+        debug!("{:#?}", object_ids);
 
         let mut objects = Vec::with_capacity(len as usize);
         for (object_type, object_instance) in object_ids {
             let object_props = self.read_properties(object_type, object_instance);
             objects.push(object_props);
         }
-        println!("Objects:\n{:#?}", objects);
+        debug!("Objects:\n{:#?}", objects);
 
-        // Populate the SimpleEpics
+        // Populate
         let device = device_props
             .into_iter()
             .map(|(id, val)| (cstr(unsafe { bacnet_sys::bactext_property_name(id) }), val))
@@ -326,84 +327,10 @@ impl BACnetDevice {
             })
             .collect::<Vec<_>>();
 
-        Ok(SimpleEpics {
+        Ok(Epics {
             device,
             object_list,
         })
-        //bail!("Not yet implemented");
-    }
-
-    pub fn epics(&self) -> Fallible<Epics> {
-        let init = std::time::Instant::now();
-        let mut src = bacnet_sys::BACNET_ADDRESS::default();
-
-        // FIXME Set different callback methods to handle incoming data
-
-        // Getting EPICS relies on a different kind of data processing compared to readprop().
-        //
-        // Initial -> GetHeadingInfo -> GetHeadingResponse -> PrintHeading
-        //
-        // Next, we try the "Get All Request" falling back to getting objects one at a time.
-        //
-        // -> GetAllRequest -> GetAllResponse
-        //
-
-        let mut rx_buf = [0u8; bacnet_sys::MAX_PDU as usize];
-        let mut my_object = bacnet_sys::BACNET_OBJECT_ID::default();
-        my_object.type_ = bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE;
-        my_object.instance = self.device_id;
-        let mut rpm_object = bacnet_sys::BACNET_READ_ACCESS_DATA::default();
-
-        // aka StartNextObject(rpm_object, BACNET_OBJECT_ID pNewObject)
-        // Error_Detected = false;
-        // Property_List_Index = 0;
-        // Property_List_Length = 0;
-        rpm_object.object_type = my_object.type_;
-        rpm_object.object_instance = my_object.instance;
-
-        let device_props = [
-            bacnet_sys::BACNET_PROPERTY_ID_PROP_VENDOR_NAME,
-            bacnet_sys::BACNET_PROPERTY_ID_PROP_MODEL_NAME,
-            bacnet_sys::BACNET_PROPERTY_ID_PROP_MAX_APDU_LENGTH_ACCEPTED,
-            bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_SERVICES_SUPPORTED,
-            bacnet_sys::BACNET_PROPERTY_ID_PROP_PROTOCOL_OBJECT_TYPES_SUPPORTED,
-            bacnet_sys::BACNET_PROPERTY_ID_PROP_DESCRIPTION,
-        ];
-        // Build a linked list of BACNET_PROPERTY_REFERENCE
-        let mut list_head = None;
-        for prop in IntoIterator::into_iter(device_props).rev() {
-            let mut new_entry = bacnet_sys::BACNET_PROPERTY_REFERENCE::default();
-            new_entry.propertyIdentifier = prop;
-            new_entry.propertyArrayIndex = bacnet_sys::BACNET_ARRAY_ALL;
-            if let Some(list_head) = list_head {
-                new_entry.next = Box::into_raw(Box::new(list_head));
-            }
-            list_head = Some(new_entry);
-        }
-        let mut rpm_property = bacnet_sys::BACNET_PROPERTY_REFERENCE::default();
-        rpm_object.listOfProperties = Box::into_raw(Box::new(dbg!(list_head.unwrap())));
-
-        let request_invoke_id = unsafe {
-            bacnet_sys::Send_Read_Property_Multiple_Request(
-                &mut rx_buf as *mut _,
-                bacnet_sys::MAX_APDU.into(),
-                self.device_id,
-                &mut rpm_object,
-            )
-        };
-        {
-            let mut lock = TARGET_ADDRESSES.lock().unwrap();
-            if let Some(target) = lock.get_mut(&self.device_id) {
-                target.request = Some((request_invoke_id, RequestStatus::Ongoing));
-            }
-        }
-        debug!("request_invoke_id = {}", request_invoke_id);
-
-        recv(&mut src, &mut rx_buf, request_invoke_id)?;
-
-        debug!("epics() finished in {:?}", init.elapsed());
-        let epics = Epics::default();
-        Ok(epics)
     }
 
     pub fn disconnect(&self) {
@@ -411,41 +338,6 @@ impl BACnetDevice {
             bacnet_sys::address_remove_device(self.device_id);
         }
     }
-}
-// Run the inner bip_receive() function and return when data has been provided for the given
-fn recv(
-    src: &mut bacnet_sys::BACNET_ADDRESS,
-    rx_buf: &mut [u8],
-    request_invoke_id: u8,
-) -> Fallible<()> {
-    const TIMEOUT: u32 = 100; // ms
-    let start = std::time::Instant::now();
-    loop {
-        let pdu_len = unsafe {
-            bacnet_sys::bip_receive(
-                src,
-                rx_buf.as_mut_ptr(),
-                bacnet_sys::MAX_MPDU as u16,
-                TIMEOUT,
-            )
-        };
-        if pdu_len > 0 {
-            unsafe { bacnet_sys::npdu_handler(src, rx_buf.as_mut_ptr(), pdu_len) }
-        }
-        if unsafe { bacnet_sys::tsm_invoke_id_free(request_invoke_id) } {
-            break; // This means we processed the request successfully!
-        }
-        if unsafe { bacnet_sys::tsm_invoke_id_failed(request_invoke_id) } {
-            // An error! Return
-            bail!("TSM timeout");
-        }
-
-        if start.elapsed().as_secs() > 3 {
-            // FIXME(tj): A better timeout here...
-            bail!("APDU timeout");
-        }
-    }
-    Ok(())
 }
 
 impl Drop for BACnetDevice {
