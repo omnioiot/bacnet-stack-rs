@@ -62,6 +62,18 @@ pub enum BACnetErr {
     /// Request was aborted with the given reason code and text
     #[fail(display = "Aborted: {} (code {})", text, code)]
     Aborted { text: String, code: u8 },
+
+    /// Request resulted in an error
+    #[fail(
+        display = "Error: class={} ({}) {} ({})",
+        class_text, class, text, code
+    )]
+    Error {
+        class_text: String,
+        class: u32,
+        text: String,
+        code: u32,
+    },
 }
 
 // A structure for tracking
@@ -704,13 +716,22 @@ extern "C" fn my_error_handler(
     error_class: bacnet_sys::BACNET_ERROR_CLASS,
     error_code: bacnet_sys::BACNET_ERROR_CODE,
 ) {
-    // TODO(tj): address_match(&Target_Address, src) && invoke_id == Request_Invoke_ID
-    let error_class_str = cstr(unsafe { bacnet_sys::bactext_error_class_name(error_class) });
-    let error_code_str = cstr(unsafe { bacnet_sys::bactext_error_code_name(error_code) });
-    error!(
-        "BACnet error: error_class={} ({}) error_code={} ({})",
-        error_class, error_class_str, error_code, error_code_str,
-    );
+    let mut lock = TARGET_ADDRESSES.lock().unwrap();
+    if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
+        let error_class_str = cstr(unsafe { bacnet_sys::bactext_error_class_name(error_class) });
+        let error_code_str = cstr(unsafe { bacnet_sys::bactext_error_code_name(error_code) });
+        error!(
+            "BACnet error: error_class={} ({}) error_code={} ({})",
+            error_class, error_class_str, error_code, error_code_str,
+        );
+        let err = BACnetErr::Error {
+            class_text: error_class_str,
+            class: error_class,
+            text: error_code_str,
+            code: error_code,
+        };
+        target.request = Some((invoke_id, RequestStatus::Error(err)));
+    }
 }
 
 #[no_mangle]
