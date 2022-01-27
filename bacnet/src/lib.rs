@@ -325,7 +325,7 @@ impl BACnetDevice {
                                             object_type,
                                             object_instance,
                                             prop,
-                                            i as u32,
+                                            i as u32 + 1,
                                         ) {
                                             ary.push(val);
                                         }
