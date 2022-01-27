@@ -48,10 +48,20 @@ lazy_static! {
 
 // Status of a request
 enum RequestStatus {
-    Ongoing,      // No reply has been received yet
-    Done,         // Successfully completed
-    Rejected(u8), // Rejected with the given reason code
-    Aborted(u8),  // Aborted with given reason code
+    Ongoing,          // No reply has been received yet
+    Done,             // Successfully completed
+    Error(BACnetErr), // Request failed
+}
+
+#[derive(Debug, Fail)]
+pub enum BACnetErr {
+    /// Request was rejected with the given reason code
+    #[fail(display = "Rejected: code {}", code)]
+    Rejected { code: u8 }, // Rejected with the given reason code
+
+    /// Request was aborted with the given reason code and text
+    #[fail(display = "Aborted: {} (code {})", text, code)]
+    Aborted { text: String, code: u8 },
 }
 
 // A structure for tracking
@@ -214,10 +224,17 @@ impl BACnetDevice {
         let ret = {
             let mut lock = TARGET_ADDRESSES.lock().unwrap();
             let h = lock.get_mut(&self.device_id).unwrap();
-            //h.request_invoke_id = 0;
-            h.value
-                .take()
-                .unwrap_or_else(|| Err(format_err!("No value was extracted")))
+            let request_status = h.request.take();
+            match request_status.unwrap().1 {
+                RequestStatus::Done => h
+                    .value
+                    .take()
+                    .unwrap_or_else(|| Err(format_err!("No value was extracted"))),
+                RequestStatus::Ongoing => panic!(
+                    "attempting to extract a value, but the request is still marked as on-going"
+                ),
+                RequestStatus::Error(err) => Err(err.into()),
+            }
         };
 
         debug!("read_prop() finished in {:?}", init.elapsed());
@@ -705,11 +722,15 @@ extern "C" fn my_abort_handler(
     if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
         let abort_text =
             cstr(unsafe { bacnet_sys::bactext_abort_reason_name(abort_reason as u32) });
-        target.request = Some((invoke_id, RequestStatus::Aborted(abort_reason)));
         error!(
             "aborted invoke_id = {} abort_reason = {} ({})",
             invoke_id, abort_text, abort_reason
         );
+        let err_abort = BACnetErr::Aborted {
+            text: abort_text,
+            code: abort_reason,
+        };
+        target.request = Some((invoke_id, RequestStatus::Error(err_abort)));
     }
 }
 
@@ -723,7 +744,12 @@ extern "C" fn my_reject_handler(
 
     let mut lock = TARGET_ADDRESSES.lock().unwrap();
     if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
-        target.request = Some((invoke_id, RequestStatus::Rejected(reject_reason)));
+        target.request = Some((
+            invoke_id,
+            RequestStatus::Error(BACnetErr::Rejected {
+                code: reject_reason,
+            }),
+        ));
     }
 }
 
