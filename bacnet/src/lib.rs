@@ -265,6 +265,27 @@ impl BACnetDevice {
             }
         }
 
+        // Look at optional properties
+        let optlen = min(special_property_list.Optional.count, 130 - len);
+        for i in 0..optlen {
+            let prop = unsafe { *special_property_list.Optional.pList.offset(i as isize) } as u32;
+
+            if log_enabled!(log::Level::Debug) {
+                let prop_name = cstr(unsafe { bacnet_sys::bactext_property_name(prop) });
+                debug!("Optional property {} ({})", prop_name, prop);
+            }
+            match self.read_prop(object_type, object_instance, prop) {
+                Ok(v) => {
+                    debug!("OK. Got value {:?}", v);
+                    ret.insert(prop, v);
+                }
+                Err(err) => {
+                    // This is fine...
+                    warn!("Failed to get property {}", err);
+                }
+            }
+        }
+
         ret
     }
 
