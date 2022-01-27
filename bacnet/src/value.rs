@@ -19,6 +19,7 @@ pub enum BACnetValue {
         object_type: u32,
         object_instance: u32,
     },
+    Array(Vec<BACnetValue>),
 }
 
 impl TryInto<String> for BACnetValue {

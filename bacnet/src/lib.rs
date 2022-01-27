@@ -310,7 +310,31 @@ impl BACnetDevice {
                 }
                 Err(err) => {
                     if let Some(bacnet_err) = err.downcast_ref::<BACnetErr>() {
-                        warn!("{:?}", bacnet_err);
+                        match bacnet_err {
+                            BACnetErr::Aborted { code, .. } if *code == 4 => {
+                                // code == 4 is "segmentation not supported". This is an array
+                                let len: Result<u64, _> = self
+                                    .read_prop_at(object_type, object_instance, prop, 0)
+                                    .and_then(|x| x.try_into());
+
+                                if let Ok(len) = len {
+                                    let mut ary = Vec::with_capacity(len as usize);
+                                    info!("Fetching {} items!", len);
+                                    for i in 0..len {
+                                        if let Ok(val) = self.read_prop_at(
+                                            object_type,
+                                            object_instance,
+                                            prop,
+                                            i as u32,
+                                        ) {
+                                            ary.push(val);
+                                        }
+                                    }
+                                    ret.insert(prop, BACnetValue::Array(ary));
+                                }
+                            }
+                            _ => warn!("{:?}", bacnet_err),
+                        }
                     } else {
                         // This is fine...
                         warn!("Failed to get property {}", err);
