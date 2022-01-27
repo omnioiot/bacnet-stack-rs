@@ -297,8 +297,12 @@ impl BACnetDevice {
                     ret.insert(prop, v);
                 }
                 Err(err) => {
-                    // This is fine...
-                    warn!("Failed to get property {}", err);
+                    if let Some(bacnet_err) = err.downcast_ref::<BACnetErr>() {
+                        warn!("{:?}", bacnet_err);
+                    } else {
+                        // This is fine...
+                        warn!("Failed to get property {}", err);
+                    }
                 }
             }
         }
