@@ -289,7 +289,23 @@ impl BACnetDevice {
                     ret.insert(prop, v);
                 }
                 Err(err) => {
-                    error!("Failed to get property {}", err);
+                    if let Some(bacnet_err) = err.downcast_ref::<BACnetErr>() {
+                        // if bacnet_err is unknown property, just debug it and move on
+                        if matches!(
+                            bacnet_err,
+                            BACnetErr::Error {
+                                class: 2,
+                                code: 32,
+                                ..
+                            }
+                        ) {
+                            debug!("{}", bacnet_err);
+                        } else {
+                            warn!("{}", bacnet_err);
+                        }
+                    } else {
+                        error!("Failed to get property {}", err);
+                    }
                 }
             }
         }
@@ -333,11 +349,11 @@ impl BACnetDevice {
                                     ret.insert(prop, BACnetValue::Array(ary));
                                 }
                             }
-                            _ => warn!("{:?}", bacnet_err),
+                            _ => debug!("{:?}", bacnet_err),
                         }
                     } else {
                         // This is fine...
-                        warn!("Failed to get property {}", err);
+                        debug!("Failed to get property {}", err);
                     }
                 }
             }
@@ -744,7 +760,7 @@ extern "C" fn my_error_handler(
     if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
         let error_class_str = cstr(unsafe { bacnet_sys::bactext_error_class_name(error_class) });
         let error_code_str = cstr(unsafe { bacnet_sys::bactext_error_code_name(error_code) });
-        error!(
+        debug!(
             "BACnet error: error_class={} ({}) error_code={} ({})",
             error_class, error_class_str, error_code, error_code_str,
         );
@@ -771,7 +787,7 @@ extern "C" fn my_abort_handler(
     if let Some(target) = find_matching_device(&mut lock, src, invoke_id) {
         let abort_text =
             cstr(unsafe { bacnet_sys::bactext_abort_reason_name(abort_reason as u32) });
-        error!(
+        debug!(
             "aborted invoke_id = {} abort_reason = {} ({})",
             invoke_id, abort_text, abort_reason
         );
