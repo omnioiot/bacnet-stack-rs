@@ -335,7 +335,6 @@ impl BACnetDevice {
 
                                 if let Ok(len) = len {
                                     let mut ary = Vec::with_capacity(len as usize);
-                                    info!("Fetching {} items!", len);
                                     for i in 0..len {
                                         if let Ok(val) = self.read_prop_at(
                                             object_type,
