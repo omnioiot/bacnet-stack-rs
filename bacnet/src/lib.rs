@@ -378,7 +378,7 @@ impl BACnetDevice {
             .try_into()?;
 
         let mut object_ids = Vec::with_capacity(len as usize);
-        for i in 1..len + 1 {
+        for i in 2..len + 1 {
             match self.read_prop_at(
                 bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE,
                 self.device_id,
