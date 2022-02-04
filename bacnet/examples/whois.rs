@@ -4,6 +4,7 @@ fn main() {
     pretty_env_logger::init();
     let devices = WhoIs::new()
         .timeout(std::time::Duration::from_secs(1))
+        .subnet(5)
         .execute()
         .unwrap();
 

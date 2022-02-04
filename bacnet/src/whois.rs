@@ -31,6 +31,9 @@ pub struct IAmDevice {
 pub struct WhoIs {
     /// How long to wait until we stop listening for I-Am requests.
     timeout: Duration,
+
+    /// Restrict whois query to the given subnet, default is `None` which means a global broadcast.
+    subnet: Option<u16>,
 }
 
 // WhoIs::new().timeout(1000).execute()
@@ -45,9 +48,19 @@ impl WhoIs {
         self
     }
 
+    pub fn subnet<S>(mut self, subnet: S) -> Self
+    where
+        S: Into<Option<u16>>,
+    {
+        self.subnet = subnet.into();
+        self
+    }
+
     pub fn execute(self) -> Result<Vec<IAmDevice>, ()> {
+        let WhoIs { timeout, subnet } = self;
+
         // create an object with a Drop impl that calls bip_cleanup
-        whois(self.timeout);
+        whois(timeout, subnet);
 
         let devices = if let Ok(mut lock) = DISCOVERED_DEVICES.lock() {
             lock.drain(..).collect()
@@ -63,6 +76,7 @@ impl Default for WhoIs {
     fn default() -> Self {
         WhoIs {
             timeout: Duration::from_secs(3),
+            subnet: None,
         }
     }
 }
@@ -121,7 +135,7 @@ extern "C" fn i_am_handler(
 
 // TODO(tj): Handle duplicates. A duplicate is pretty much a device ID we've already seen, from
 // what I understand.
-fn whois(timeout: Duration) {
+fn whois(timeout: Duration, subnet: Option<u16>) {
     let mut dest = bacnet_sys::BACNET_ADDRESS::default();
     let target_object_instance_min = -1i32; // TODO(tj): parameterize?
     let target_object_instance_max = -1i32; // TODO(tj): parameterize?
@@ -146,6 +160,10 @@ fn whois(timeout: Duration) {
         // apdu_set_reject_handler(MyRejectHandler);
         bacnet_sys::address_init();
         bacnet_sys::dlenv_init();
+    }
+
+    if let Some(subnet) = subnet {
+        dest.net = subnet;
     }
 
     let mut src = bacnet_sys::BACNET_ADDRESS::default();
