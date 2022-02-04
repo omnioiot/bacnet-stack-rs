@@ -140,8 +140,15 @@ fn whois(timeout: Duration, subnet: Option<u16>) {
     let target_object_instance_min = -1i32; // TODO(tj): parameterize?
     let target_object_instance_max = -1i32; // TODO(tj): parameterize?
 
+    if let Some(subnet) = subnet {
+        dest.net = subnet;
+    } else {
+        unsafe {
+            bacnet_sys::bip_get_broadcast_address(&mut dest as *mut _);
+        }
+    }
+
     unsafe {
-        bacnet_sys::bip_get_broadcast_address(&mut dest as *mut _);
         bacnet_sys::Device_Set_Object_Instance_Number(bacnet_sys::BACNET_MAX_INSTANCE);
         // service handlers
         bacnet_sys::Device_Init(std::ptr::null_mut());
@@ -160,10 +167,6 @@ fn whois(timeout: Duration, subnet: Option<u16>) {
         // apdu_set_reject_handler(MyRejectHandler);
         bacnet_sys::address_init();
         bacnet_sys::dlenv_init();
-    }
-
-    if let Some(subnet) = subnet {
-        dest.net = subnet;
     }
 
     let mut src = bacnet_sys::BACNET_ADDRESS::default();
