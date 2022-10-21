@@ -9,7 +9,6 @@ edition = "2018"
 bacnet-sys = { path = "../bacnet-sys" }
 lazy_static = "1.4.0"
 log = "0.4"
-failure = "0.1.8"
 
 [dev-dependencies]
 pretty_env_logger = "0.4.0"

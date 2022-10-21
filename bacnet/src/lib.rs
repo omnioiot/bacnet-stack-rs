@@ -3,8 +3,6 @@
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate failure;
 
 use std::cmp::min;
 use std::collections::HashMap;
@@ -13,8 +11,7 @@ use std::ffi::CStr;
 use std::net::Ipv4Addr;
 use std::os::raw::c_char;
 use std::sync::{Mutex, Once};
-
-use failure::Fallible;
+use std::{error, fmt, result};
 
 pub use epics::Epics;
 use value::BACnetValue;
@@ -53,21 +50,15 @@ enum RequestStatus {
     Error(BACnetErr), // Request failed
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug)]
 pub enum BACnetErr {
     /// Request was rejected with the given reason code
-    #[fail(display = "Rejected: code {}", code)]
-    Rejected { code: u8 }, // Rejected with the given reason code
+    Rejected { code: u8 },
 
     /// Request was aborted with the given reason code and text
-    #[fail(display = "Aborted: {} (code {})", text, code)]
     Aborted { text: String, code: u8 },
 
     /// Request resulted in an error
-    #[fail(
-        display = "Error: class={} ({}) {} ({})",
-        class_text, class, text, code
-    )]
     Error {
         class_text: String,
         class: u32,
@@ -75,6 +66,76 @@ pub enum BACnetErr {
         code: u32,
     },
 }
+
+impl fmt::Display for BACnetErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BACnetErr::Rejected { code } => write!(f, "Rejected: code {}", code),
+            BACnetErr::Aborted { text, code } => write!(f, "Aborted: {} (code {})", text, code),
+            BACnetErr::Error {
+                class_text,
+                class,
+                text,
+                code,
+            } => write!(
+                f,
+                "Error: class={} ({}) {} ({})",
+                class_text, class, text, code
+            ),
+        }
+    }
+}
+
+impl error::Error for BACnetErr {}
+
+#[derive(Debug)]
+pub enum Error {
+    CannotTurnValueIntoString { value: BACnetValue },
+    FailedToDecodeData,
+    UnhandledTypeTag { tag_name: String, value_tag: u8 },
+    NoValueWasExtracted,
+    NotConnectedToDevice { device_id: u32 },
+    FailedToBindToDevice,
+    TsmTimeout,
+    ApduTimeout,
+    DecodingError,
+    BacnetError { error: BACnetErr },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Error::*;
+        match self {
+            CannotTurnValueIntoString { value } => {
+                write!(f, "Cannot turn '{:?}' into a string", value)
+            }
+            FailedToDecodeData => write!(f, "failed to decode data"),
+            UnhandledTypeTag {
+                tag_name,
+                value_tag,
+            } => write!(f, "unhandled type tag {} ({:?})", tag_name, value_tag),
+            NoValueWasExtracted => write!(f, "No value was extracted"),
+            NotConnectedToDevice { device_id } => {
+                write!(f, "Not connected to device {}", device_id)
+            }
+            FailedToBindToDevice => write!(f, "failed to bind to the device"),
+            TsmTimeout => write!(f, "TSM timeout"),
+            ApduTimeout => write!(f, "APDU timeout"),
+            DecodingError => write!(f, "decoding error"),
+            BacnetError { error } => error.fmt(f),
+        }
+    }
+}
+
+impl error::Error for Error {}
+
+impl From<BACnetErr> for Error {
+    fn from(error: BACnetErr) -> Self {
+        Self::BacnetError { error }
+    }
+}
+
+pub type Result<A> = result::Result<A, Error>;
 
 // A structure for tracking
 //
@@ -85,7 +146,7 @@ pub enum BACnetErr {
 struct TargetDevice {
     addr: bacnet_sys::BACNET_ADDRESS,
     request: Option<(RequestInvokeId, RequestStatus)>, // For tracking on-going an ongoing request
-    value: Option<Fallible<BACnetValue>>,              // TODO Build this into the 'request status'
+    value: Option<Result<BACnetValue>>,                // TODO Build this into the 'request status'
 }
 
 // As I understand the BACnet stack, it works by acting as another BACnet device on the network.
@@ -111,7 +172,7 @@ impl BACnetDevice {
         BACnetDeviceBuilder::default()
     }
 
-    pub fn connect(&mut self) -> Fallible<()> {
+    pub fn connect(&mut self) -> Result<()> {
         BACNET_STACK_INIT.call_once(|| unsafe {
             init_service_handlers();
             bacnet_sys::dlenv_init();
@@ -138,7 +199,7 @@ impl BACnetDevice {
             );
             Ok(())
         } else {
-            Err(format_err!("failed to bind to the device"))
+            Err(Error::FailedToBindToDevice)
         }
     }
 
@@ -149,7 +210,7 @@ impl BACnetDevice {
         &self,
         object_type: ObjectType,
         object_instance: u32,
-    ) -> Fallible<BACnetValue> {
+    ) -> Result<BACnetValue> {
         self.read_prop(
             object_type,
             object_instance,
@@ -165,7 +226,7 @@ impl BACnetDevice {
         object_type: ObjectType,
         object_instance: u32,
         property_id: ObjectPropertyId,
-    ) -> Fallible<BACnetValue> {
+    ) -> Result<BACnetValue> {
         self.read_prop_at(
             object_type,
             object_instance,
@@ -180,7 +241,7 @@ impl BACnetDevice {
         object_instance: u32,
         property_id: ObjectPropertyId,
         index: u32,
-    ) -> Fallible<BACnetValue> {
+    ) -> Result<BACnetValue> {
         let init = std::time::Instant::now();
         const TIMEOUT: u32 = 100;
         let request_invoke_id =
@@ -197,7 +258,9 @@ impl BACnetDevice {
                 h.request = Some((request_invoke_id, RequestStatus::Ongoing));
                 request_invoke_id
             } else {
-                bail!("Not connected to device {}", self.device_id)
+                return Err(Error::NotConnectedToDevice {
+                    device_id: self.device_id,
+                });
             };
 
         let mut src = bacnet_sys::BACNET_ADDRESS::default();
@@ -224,12 +287,12 @@ impl BACnetDevice {
                 break;
             }
             if unsafe { bacnet_sys::tsm_invoke_id_failed(request_invoke_id) } {
-                bail!("TSM timeout");
+                return Err(Error::TsmTimeout);
             }
 
             if start.elapsed().as_secs() > 3 {
                 // FIXME(tj): A better timeout here...
-                bail!("APDU timeout");
+                return Err(Error::ApduTimeout);
             }
         }
 
@@ -241,7 +304,7 @@ impl BACnetDevice {
                 RequestStatus::Done => h
                     .value
                     .take()
-                    .unwrap_or_else(|| Err(format_err!("No value was extracted"))),
+                    .unwrap_or_else(|| Err(Error::NoValueWasExtracted)),
                 RequestStatus::Ongoing => panic!(
                     "attempting to extract a value, but the request is still marked as on-going"
                 ),
@@ -288,24 +351,22 @@ impl BACnetDevice {
                     debug!("OK. Got value {:?}", v);
                     ret.insert(prop, v);
                 }
-                Err(err) => {
-                    if let Some(bacnet_err) = err.downcast_ref::<BACnetErr>() {
-                        // if bacnet_err is unknown property, just debug it and move on
-                        if matches!(
-                            bacnet_err,
-                            BACnetErr::Error {
-                                class: 2,
-                                code: 32,
-                                ..
-                            }
-                        ) {
-                            debug!("{}", bacnet_err);
-                        } else {
-                            warn!("{}", bacnet_err);
+                Err(Error::BacnetError { error: bacnet_err }) => {
+                    if matches!(
+                        bacnet_err,
+                        BACnetErr::Error {
+                            class: 2,
+                            code: 32,
+                            ..
                         }
+                    ) {
+                        debug!("{}", bacnet_err);
                     } else {
-                        error!("Failed to get property {}", err);
+                        warn!("{}", bacnet_err);
                     }
+                }
+                Err(err) => {
+                    error!("Failed to get property {}", err);
                 }
             }
         }
@@ -324,36 +385,35 @@ impl BACnetDevice {
                     debug!("OK. Got value {:?}", v);
                     ret.insert(prop, v);
                 }
-                Err(err) => {
-                    if let Some(bacnet_err) = err.downcast_ref::<BACnetErr>() {
-                        match bacnet_err {
-                            BACnetErr::Aborted { code, .. } if *code == 4 => {
-                                // code == 4 is "segmentation not supported". This is an array
-                                let len: Result<u64, _> = self
-                                    .read_prop_at(object_type, object_instance, prop, 0)
-                                    .and_then(|x| x.try_into());
+                Err(Error::BacnetError { error: bacnet_err }) => {
+                    match bacnet_err {
+                        BACnetErr::Aborted { code, .. } if code == 4 => {
+                            // code == 4 is "segmentation not supported". This is an array
+                            let len: Result<u64> = self
+                                .read_prop_at(object_type, object_instance, prop, 0)
+                                .and_then(|x| x.try_into());
 
-                                if let Ok(len) = len {
-                                    let mut ary = Vec::with_capacity(len as usize);
-                                    for i in 0..len {
-                                        if let Ok(val) = self.read_prop_at(
-                                            object_type,
-                                            object_instance,
-                                            prop,
-                                            i as u32 + 1,
-                                        ) {
-                                            ary.push(val);
-                                        }
+                            if let Ok(len) = len {
+                                let mut ary = Vec::with_capacity(len as usize);
+                                for i in 0..len {
+                                    if let Ok(val) = self.read_prop_at(
+                                        object_type,
+                                        object_instance,
+                                        prop,
+                                        i as u32 + 1,
+                                    ) {
+                                        ary.push(val);
                                     }
-                                    ret.insert(prop, BACnetValue::Array(ary));
                                 }
+                                ret.insert(prop, BACnetValue::Array(ary));
                             }
-                            _ => debug!("{:?}", bacnet_err),
                         }
-                    } else {
-                        // This is fine...
-                        debug!("Failed to get property {}", err);
+                        _ => debug!("{:?}", bacnet_err),
                     }
+                }
+                Err(err) => {
+                    // This is fine...
+                    debug!("Failed to get property {}", err);
                 }
             }
         }
@@ -362,7 +422,7 @@ impl BACnetDevice {
     }
 
     /// Scan the device for all available tags and produce an `Epics` object
-    pub fn epics(&self) -> Fallible<Epics> {
+    pub fn epics(&self) -> Result<Epics> {
         let device_props =
             self.read_properties(bacnet_sys::BACNET_OBJECT_TYPE_OBJECT_DEVICE, self.device_id);
 
@@ -541,13 +601,13 @@ extern "C" fn my_readprop_ack_handler(
             target.value = Some(decoded);
         } else {
             error!("<decode failed>");
-            target.value = Some(Err(format_err!("failed to decode data")));
+            target.value = Some(Err(Error::FailedToDecodeData));
         }
         target.request = Some((invoke_id, RequestStatus::Done));
     }
 }
 
-fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetValue> {
+fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Result<BACnetValue> {
     let mut value = bacnet_sys::BACNET_APPLICATION_DATA_VALUE::default();
     let appdata = data.application_data;
     let appdata_len = data.application_data_len;
@@ -557,7 +617,7 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
     };
 
     if len == bacnet_sys::BACNET_STATUS_ERROR {
-        bail!("decoding error");
+        return Err(Error::DecodingError);
     }
 
     Ok(match value.tag as u32 {
@@ -734,7 +794,10 @@ fn decode_data(data: bacnet_sys::BACNET_READ_PROPERTY_DATA) -> Fallible<BACnetVa
         _ => {
             let tag_name =
                 cstr(unsafe { bacnet_sys::bactext_application_tag_name(value.tag as u32) });
-            bail!("unhandled type tag {} ({:?})", tag_name, value.tag);
+            return Err(Error::UnhandledTypeTag {
+                tag_name,
+                value_tag: value.tag,
+            });
         }
     })
 }
