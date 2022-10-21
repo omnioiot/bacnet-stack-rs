@@ -1,3 +1,4 @@
+use crate::Error;
 /// Values that are returned from reading properties.
 ///
 use std::convert::TryInto;
@@ -23,23 +24,23 @@ pub enum BACnetValue {
 }
 
 impl TryInto<String> for BACnetValue {
-    type Error = failure::Error;
+    type Error = Error;
     fn try_into(self) -> Result<String, Self::Error> {
         Ok(match self {
             BACnetValue::String(s) => s,
             BACnetValue::Enum(_, Some(s)) => s,
             BACnetValue::Enum(i, None) => format!("{}", i),
-            _ => return Err(format_err!("Cannot turn '{:?}' into a string", self)),
+            _ => return Err(Error::CannotTurnValueIntoString { value: self }),
         })
     }
 }
 
 impl TryInto<u64> for BACnetValue {
-    type Error = failure::Error;
+    type Error = Error;
     fn try_into(self) -> Result<u64, Self::Error> {
         Ok(match self {
             BACnetValue::Uint(u) => u,
-            _ => return Err(format_err!("Cannot turn '{:?}' into a u64", self)),
+            _ => return Err(Error::CannotTurnValueIntoString { value: self }),
         })
     }
 }
