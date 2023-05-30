@@ -445,7 +445,7 @@ impl Drop for BACnetDevice {
 pub struct BACnetDeviceBuilder {
     ip: Ipv4Addr,
     dnet: u16,
-    dadr: u8,
+    dadr: Vec<u8>,
     port: u16,
     device_id: u32,
 }
@@ -455,7 +455,7 @@ impl Default for BACnetDeviceBuilder {
         Self {
             ip: Ipv4Addr::LOCALHOST,
             dnet: 0,
-            dadr: 0,
+            dadr: vec![0; 6],
             port: 0xBAC0,
             device_id: 0,
         }
@@ -473,7 +473,7 @@ impl BACnetDeviceBuilder {
         self
     }
 
-    pub fn dadr(mut self, dadr: u8) -> Self {
+    pub fn dadr(mut self, dadr: Vec<u8>) -> Self {
         self.dadr = dadr;
         self
     }
@@ -502,8 +502,8 @@ impl BACnetDeviceBuilder {
         addr.mac[5] = (port & 0xff) as u8;
         addr.mac_len = 6;
         addr.net = dnet;
-        addr.adr[0] = dadr;
-        addr.len = 1;
+        addr.len = dadr.len() as u8;
+        addr.adr[..dadr.len()].copy_from_slice(&dadr);
 
         BACnetDevice {
             device_id,
