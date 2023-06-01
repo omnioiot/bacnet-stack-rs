@@ -12,6 +12,8 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::Dadr;
+
 lazy_static! {
     /// A global list of discovered devices. The function my_i_am_handler() pushes discovered
     /// devices here.
@@ -25,7 +27,7 @@ pub struct IAmDevice {
     pub vendor_id: u16,
     pub mac_addr: [u8; 6],
     pub network_number: u16,
-    pub addr: Vec<u8>,
+    pub addr: Dadr,
 }
 
 pub struct WhoIs {
@@ -114,10 +116,10 @@ extern "C" fn i_am_handler(
     mac_addr[..mac_len].copy_from_slice(unsafe { &(*src).mac[..mac_len] });
     let network_number = unsafe { (*src).net };
 
-    let mut addr = [0u8; 6].to_vec();
+    let mut addr = Dadr::new(&[0]);
     if network_number > 0 {
-        let adr_len = unsafe { (*src).len } as usize;
-        addr[..adr_len].copy_from_slice(unsafe { &(*src).adr[..adr_len] });
+        addr.len = unsafe { (*src).len } as usize;
+        addr.adr[..addr.len].copy_from_slice(unsafe { &(*src).adr[..addr.len] });
     }
 
     debug!("MAC = {:02X?}", mac_addr);

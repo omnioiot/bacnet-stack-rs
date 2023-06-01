@@ -1,7 +1,7 @@
 extern crate bacnet;
 extern crate structopt;
 
-use bacnet::BACnetDevice;
+use bacnet::{BACnetDevice, Dadr};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -13,8 +13,8 @@ struct Opt {
     ip: std::net::Ipv4Addr,
     #[structopt(long, default_value = "0")]
     dnet: u16,
-    #[structopt(long, default_value = "0")]
-    dadr: u8,
+    #[structopt(long, default_value = "[0,0,0,0,0,0]")]
+    dadr: Dadr,
     #[structopt(long, default_value = "47808")]
     port: u16,
 
@@ -73,6 +73,7 @@ fn main() {
     let mut dev = BACnetDevice::builder()
         .device_id(opt.device_id)
         .ip(opt.ip)
+        .port(opt.port)
         .dnet(opt.dnet)
         .dadr(opt.dadr)
         .port(opt.port)

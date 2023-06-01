@@ -10,8 +10,9 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::CStr;
-use std::net::Ipv4Addr;
+use std::net::{AddrParseError, Ipv4Addr, SocketAddrV4};
 use std::os::raw::c_char;
+use std::str::FromStr;
 use std::sync::{Mutex, Once};
 
 use failure::Fallible;
@@ -440,12 +441,65 @@ impl Drop for BACnetDevice {
     }
 }
 
+/// A dadr
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Dadr {
+    pub adr: [u8; 6],
+    pub len: usize,
+}
+
+impl Dadr {
+    pub fn from_parts(dadr: &[u8], len: usize) -> Self {
+        Self::new(&dadr[..len])
+    }
+
+    pub fn new(dadr: &[u8]) -> Self {
+        let len = dadr.len();
+        if len < 1 || len > 6 {
+            panic!("the given address must have length minimum 1, maximum 6");
+        }
+        let mut adr = [0u8; 6];
+        adr[..len].copy_from_slice(dadr);
+        Self { adr, len }
+    }
+}
+
+impl FromStr for Dadr {
+    type Err = String; // TODO(tj): Should probably be something like Failure?
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut octets = [0u8; 6];
+        if let Ok(ip) = s.parse::<Ipv4Addr>() {
+            octets[..4].copy_from_slice(&ip.octets());
+            // Adding the default port 0xBAC0
+            octets[4] = 0xBA;
+            octets[5] = 0xC0;
+        } else if let Ok(socket_addr) = s.parse::<SocketAddrV4>() {
+            octets[..4].copy_from_slice(&socket_addr.ip().octets());
+            let port = socket_addr.port().to_be_bytes(); // not sure about this
+            octets[4] = port[0];
+            octets[5] = port[1];
+        } else {
+            return Err(format!(
+                "Invalid input '{}' (invalid format. Has to be either IPv4 or IPv4:Port)",
+                s
+            ));
+        }
+        Ok(Dadr::new(&octets))
+    }
+}
+
+impl AsRef<[u8]> for Dadr {
+    fn as_ref(&self) -> &[u8] {
+        &self.adr[..self.len]
+    }
+}
+
 // ./bacrp 1025 analog-value 22 present-value --mac 192.168.10.96 --dnet 5 --dadr 14
 #[derive(Debug)]
 pub struct BACnetDeviceBuilder {
     ip: Ipv4Addr,
     dnet: u16,
-    dadr: Vec<u8>,
+    dadr: Dadr,
     port: u16,
     device_id: u32,
 }
@@ -455,7 +509,7 @@ impl Default for BACnetDeviceBuilder {
         Self {
             ip: Ipv4Addr::LOCALHOST,
             dnet: 0,
-            dadr: vec![0; 6],
+            dadr: Dadr::new(&[0]),
             port: 0xBAC0,
             device_id: 0,
         }
@@ -473,7 +527,7 @@ impl BACnetDeviceBuilder {
         self
     }
 
-    pub fn dadr(mut self, dadr: Vec<u8>) -> Self {
+    pub fn dadr(mut self, dadr: Dadr) -> Self {
         self.dadr = dadr;
         self
     }
@@ -502,8 +556,9 @@ impl BACnetDeviceBuilder {
         addr.mac[5] = (port & 0xff) as u8;
         addr.mac_len = 6;
         addr.net = dnet;
+        let dadr = dadr.as_ref();
         addr.len = dadr.len() as u8;
-        addr.adr[..dadr.len()].copy_from_slice(&dadr);
+        addr.adr[..dadr.len()].copy_from_slice(dadr);
 
         BACnetDevice {
             device_id,
