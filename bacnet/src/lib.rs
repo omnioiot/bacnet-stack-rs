@@ -6,11 +6,13 @@ extern crate log;
 #[macro_use]
 extern crate failure;
 
+use serde::{Serialize, Serializer};
 use std::cmp::min;
+use std::collections::btree_set::SymmetricDifference;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::CStr;
-use std::net::{AddrParseError, Ipv4Addr, SocketAddrV4};
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::os::raw::c_char;
 use std::str::FromStr;
 use std::sync::{Mutex, Once};
@@ -442,7 +444,7 @@ impl Drop for BACnetDevice {
 }
 
 /// A dadr
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize)]
 pub struct Dadr {
     pub adr: [u8; 6],
     pub len: usize,
