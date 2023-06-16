@@ -23,7 +23,7 @@ pub enum BACnetValue {
 }
 
 impl TryInto<String> for BACnetValue {
-    type Error = failure::Error;
+    type Error = anyhow::Error;
     fn try_into(self) -> Result<String, Self::Error> {
         Ok(match self {
             BACnetValue::String(s) => s,
@@ -35,7 +35,7 @@ impl TryInto<String> for BACnetValue {
 }
 
 impl TryInto<u64> for BACnetValue {
-    type Error = failure::Error;
+    type Error = anyhow::Error;
     fn try_into(self) -> Result<u64, Self::Error> {
         Ok(match self {
             BACnetValue::Uint(u) => u,

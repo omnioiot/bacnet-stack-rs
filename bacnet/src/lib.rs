@@ -4,21 +4,20 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 #[macro_use]
-extern crate failure;
+extern crate anyhow;
 
 use serde::Serialize;
 use std::cmp::min;
-use std::collections::btree_set::SymmetricDifference;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::error::Error;
+use std::error::Error as StdError;
 use std::ffi::CStr;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::os::raw::c_char;
 use std::str::FromStr;
 use std::sync::{Mutex, Once};
 
-use failure::Fallible;
+use anyhow::Result as Fallible;
 
 pub use epics::Epics;
 use value::BACnetValue;
@@ -57,27 +56,48 @@ enum RequestStatus {
     Error(BACnetErr), // Request failed
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug)]
 pub enum BACnetErr {
     /// Request was rejected with the given reason code
-    #[fail(display = "Rejected: code {}", code)]
     Rejected { code: u8 }, // Rejected with the given reason code
 
     /// Request was aborted with the given reason code and text
-    #[fail(display = "Aborted: {} (code {})", text, code)]
     Aborted { text: String, code: u8 },
 
     /// Request resulted in an error
-    #[fail(
-        display = "Error: class={} ({}) {} ({})",
-        class_text, class, text, code
-    )]
     Error {
         class_text: String,
         class: u32,
         text: String,
         code: u32,
     },
+}
+
+impl std::fmt::Display for BACnetErr {
+    #[allow(deprecated, deprecated_in_future)]
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BACnetErr::Rejected { code } => write!(fmt, "Rejected {}", code),
+            BACnetErr::Aborted { text, code } => write!(fmt, "Aborted:{} (code {})", text, code),
+            BACnetErr::Error {
+                class_text,
+                class,
+                text,
+                code,
+            } => write!(
+                fmt,
+                "Error: class={} ({}) {} ({})",
+                class_text, class, text, code
+            ),
+        }
+    }
+}
+
+impl Into<anyhow::Error> for BACnetErr {
+    // Required method
+    fn into(self) -> anyhow::Error {
+        anyhow::Error::msg(self.to_string())
+    }
 }
 
 // A structure for tracking
@@ -468,7 +488,7 @@ impl Dadr {
 }
 
 impl FromStr for Dadr {
-    type Err = Failure; // TODO(tj): Should probably be something like Failure?
+    type Err = DadrError; // TODO(tj): Should probably be something like Failure?
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut octets = [0u8; 6];
         if let Ok(ip) = s.parse::<Ipv4Addr>() {
@@ -482,7 +502,7 @@ impl FromStr for Dadr {
             octets[4] = port[0];
             octets[5] = port[1];
         } else {
-            return Err(Failure);
+            return Err(DadrError);
         }
         Ok(Dadr::new(&octets))
     }
@@ -495,16 +515,16 @@ impl AsRef<[u8]> for Dadr {
 }
 
 #[derive(Debug)]
-pub struct Failure;
+pub struct DadrError;
 
-impl std::error::Error for Failure {
+impl std::error::Error for DadrError {
     #[allow(deprecated)]
     fn description(&self) -> &str {
         "Invalid input (invalid format. Has to be either IPv4 or IPv4:Port)"
     }
 }
 
-impl std::fmt::Display for Failure {
+impl std::fmt::Display for DadrError {
     #[allow(deprecated, deprecated_in_future)]
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fmt.write_str(self.description())
