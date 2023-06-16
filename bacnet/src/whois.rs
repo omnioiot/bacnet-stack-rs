@@ -9,10 +9,9 @@
 // In effect, this library is not thread-safe, so we need to make sure that only one WhoIs client
 // is running at a time.
 
+pub use crate::Dadr;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-
-use crate::Dadr;
 
 lazy_static! {
     /// A global list of discovered devices. The function my_i_am_handler() pushes discovered

@@ -6,11 +6,12 @@ extern crate log;
 #[macro_use]
 extern crate failure;
 
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use std::cmp::min;
 use std::collections::btree_set::SymmetricDifference;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::error::Error;
 use std::ffi::CStr;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::os::raw::c_char;
@@ -467,7 +468,7 @@ impl Dadr {
 }
 
 impl FromStr for Dadr {
-    type Err = String; // TODO(tj): Should probably be something like Failure?
+    type Err = Failure; // TODO(tj): Should probably be something like Failure?
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut octets = [0u8; 6];
         if let Ok(ip) = s.parse::<Ipv4Addr>() {
@@ -481,10 +482,7 @@ impl FromStr for Dadr {
             octets[4] = port[0];
             octets[5] = port[1];
         } else {
-            return Err(format!(
-                "Invalid input '{}' (invalid format. Has to be either IPv4 or IPv4:Port)",
-                s
-            ));
+            return Err(Failure);
         }
         Ok(Dadr::new(&octets))
     }
@@ -493,6 +491,23 @@ impl FromStr for Dadr {
 impl AsRef<[u8]> for Dadr {
     fn as_ref(&self) -> &[u8] {
         &self.adr[..self.len]
+    }
+}
+
+#[derive(Debug)]
+pub struct Failure;
+
+impl std::error::Error for Failure {
+    #[allow(deprecated)]
+    fn description(&self) -> &str {
+        "Invalid input (invalid format. Has to be either IPv4 or IPv4:Port)"
+    }
+}
+
+impl std::fmt::Display for Failure {
+    #[allow(deprecated, deprecated_in_future)]
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt.write_str(self.description())
     }
 }
 
