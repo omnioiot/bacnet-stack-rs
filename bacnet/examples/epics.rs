@@ -1,27 +1,26 @@
 extern crate bacnet;
-extern crate structopt;
 
 use bacnet::BACnetDevice;
-use structopt::StructOpt;
+use clap::Parser;
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = "epics")]
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
 struct Opt {
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     device_id: u32,
-    #[structopt(long, default_value = "192.168.10.96")]
+    #[arg(long, default_value_t = std::net::Ipv4Addr::new(192, 168, 10, 96))]
     ip: std::net::Ipv4Addr,
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     dnet: u16,
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     dadr: u8,
-    #[structopt(long, default_value = "47808")]
+    #[arg(long, default_value_t = 47808)]
     port: u16,
 }
 
 fn main() {
     pretty_env_logger::init();
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     let mut dev = BACnetDevice::builder()
         .device_id(opt.device_id)
         .ip(opt.ip)

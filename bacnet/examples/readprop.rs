@@ -1,33 +1,32 @@
 extern crate bacnet;
-extern crate structopt;
 
 use bacnet::BACnetDevice;
-use structopt::StructOpt;
+use clap::Parser;
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = "readprop")]
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
 struct Opt {
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     device_id: u32,
-    #[structopt(long, default_value = "192.168.10.96")]
+    #[arg(long, default_value_t = std::net::Ipv4Addr::new(192, 168, 10, 96))]
     ip: std::net::Ipv4Addr,
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     dnet: u16,
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     dadr: u8,
-    #[structopt(long, default_value = "47808")]
+    #[arg(long, default_value_t = 47808)]
     port: u16,
 
-    #[structopt(short = "t", long, default_value = "analog-value", parse(try_from_str = parse_object_type))]
+    #[arg(short = 't', long, default_value_t = 2, value_parser = parse_object_type)]
     object_type: bacnet_sys::BACNET_OBJECT_TYPE,
-    #[structopt(short = "i", long, default_value = "22")]
+    #[arg(short = 'i', long, default_value_t = 22)]
     object_instance: u32,
-    #[structopt(short = "p", long, default_value = "present-value", parse(try_from_str = parse_property))]
+    #[arg(short = 'p', long, default_value_t = 85, value_parser = parse_property)]
     property: u32,
-    #[structopt(short = "I", long, default_value = "4294967295")]
+    #[arg(short = 'I', long, default_value_t = 4294967295)]
     index: u32,
 
-    #[structopt(short = "n", long, default_value = "1")]
+    #[arg(short = 'n', long, default_value_t = 1)]
     number_of_reads: usize,
 }
 
@@ -69,7 +68,7 @@ fn parse_property(src: &str) -> Result<bacnet_sys::BACNET_PROPERTY_ID, String> {
 
 fn main() {
     pretty_env_logger::init();
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     let mut dev = BACnetDevice::builder()
         .device_id(opt.device_id)
         .ip(opt.ip)
